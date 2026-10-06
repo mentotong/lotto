@@ -1,0 +1,128 @@
+package main
+
+import "fmt"
+
+// ActivityPage is the admins' activity log: every sign-in, sale and
+// change, newest first, with search, filters and a CSV download.
+templ ActivityPage(v ActivityView) {
+	@pageHead("Activity", "Who did what and when: sign-ins, sales and every change to users, agents, prices, results and setup.") {
+		<a href={ templ.SafeURL("/activity.csv" + csvQuery(v.Filter)) } hx-boost="false" download class={ secondaryBtn }>
+			@icon("download", "size-5")
+			Download CSV
+		</a>
+	}
+	@logCheck(v.Total, v.Broken)
+	@searchForm("/activity") {
+		<div class="grid gap-3 sm:flex sm:flex-wrap sm:items-end">
+			<div class="min-w-0 sm:min-w-64 sm:flex-1">
+				<span class="mb-1.5 block text-[13px] font-semibold text-muted">Search</span>
+				@searchBox(v.Filter.Search.Raw, "Name, username, serial, IP address…", "Search activity")
+			</div>
+			<div class="grid grid-cols-2 gap-3 sm:contents">
+				<div class="min-w-0 sm:w-44">
+					@filterSelect("kind", "Area") {
+						<option value="">All areas</option>
+						for _, k := range activityKinds {
+							<option value={ k.Key } selected?={ k.Key == v.Filter.Kind }>{ k.Label }</option>
+						}
+					}
+				</div>
+				<div class="min-w-0 sm:w-44">
+					@field("Date") {
+						<input type="date" name="date" value={ v.Filter.Date } class={ inputCls }/>
+					}
+				</div>
+			</div>
+			if v.Filter.User != "" {
+				<input type="hidden" name="user" value={ v.Filter.User }/>
+			}
+		</div>
+	}
+	<div id="results">
+		if v.Filter.User != "" {
+			<div class="mb-4 flex flex-wrap items-center gap-2">
+				@chip("User: "+v.UserName, activityURL(v.Filter, "user", ""))
+			</div>
+		}
+		<section class="overflow-hidden rounded-2xl border border-rule bg-white">
+			@resultsHead(v.Pager, "entry", "/activity", v.Filter.Active())
+			if len(v.Entries) == 0 {
+				if v.Filter.Active() {
+					@noResults("entries", "/activity")
+				} else {
+					<div class="px-5 py-12 text-center">
+						<p class="font-semibold">Nothing logged yet</p>
+						<p class="mt-1 text-sm text-muted">Sign-ins, sales and changes show up here as they happen.</p>
+					</div>
+				}
+			} else {
+				<ol class="divide-y divide-rule/70">
+					for _, e := range v.Entries {
+						@activityRow(e, v.Filter)
+					}
+				</ol>
+			}
+			@pager(v.Pager)
+		</section>
+	</div>
+}
+
+templ activityRow(e Activity, f ActivityFilter) {
+	<li class={ "flex gap-3 px-4 py-3 sm:gap-4 sm:px-5", templ.KV("bg-[#FDF1F2]/70", e.Warning()) }>
+		<span
+			class={ "mt-0.5 grid size-9 shrink-0 place-items-center rounded-full",
+				templ.KV("bg-pen/10 text-pen", e.Warning()),
+				templ.KV("bg-form/10 text-form", !e.Warning()) }
+			title={ kindLabel(e.Kind) }
+		>
+			@icon(kindIcon(e.Kind), "size-5")
+		</span>
+		<div class="min-w-0 flex-1">
+			<p class={ "text-[15px] leading-snug [overflow-wrap:anywhere]", templ.KV("font-semibold text-pen-dark", e.Warning()) }>
+				if e.Link != "" {
+					<a href={ templ.SafeURL(e.Link) } class="hover:text-form hover:underline">{ e.Summary }</a>
+				} else {
+					{ e.Summary }
+				}
+			</p>
+			<p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-muted">
+				if e.User != "" {
+					<a href={ activityURL(f, "user", e.User) } class="font-semibold text-ink hover:text-form" title={ "Only " + e.User }>
+						if e.Name != "" {
+							{ e.Name }
+						} else {
+							{ e.User }
+						}
+					</a>
+				} else {
+					<span>Signed-out visitor</span>
+				}
+				<time datetime={ e.At.Format("2006-01-02T15:04:05Z07:00") } title={ e.At.Format("Mon 2 Jan 2006, 15:04:05 MST") }>{ e.At.Format("2 Jan 2006, 15:04") }</time>
+				if e.IP != "" {
+					<span class="tabular-nums">{ e.IP }</span>
+				}
+				<a href={ activityURL(f, "kind", e.Kind) } class="rounded bg-paper px-1.5 py-0.5 text-xs font-semibold hover:text-form">{ kindLabel(e.Kind) }</a>
+			</p>
+		</div>
+		<span class="hidden shrink-0 pt-1 text-xs tabular-nums text-muted/70 sm:block">#{ fmt.Sprint(e.ID) }</span>
+	</li>
+}
+
+// logCheck says whether the log's hash chain is intact, i.e. no line in
+// the log file was changed or removed.
+templ logCheck(total, broken int) {
+	if broken != 0 {
+		<div class="mb-4 flex gap-3 rounded-xl border-2 border-pen/40 bg-[#FDF1F2] px-4 py-3 text-[15px] text-pen-dark" role="alert">
+			@icon("shield", "mt-0.5 size-5 shrink-0")
+			<div>
+				<b>The activity log has been tampered with.</b>
+				Entry #{ fmt.Sprint(broken) } and later don't match the record, so the log file was edited or had lines removed outside the app. Keep a copy of the file and find out who had access to the server.
+			</div>
+		</div>
+	} else if total > 0 {
+		<p class="mb-4 flex items-center gap-2 text-sm text-ok">
+			@icon("shield", "size-4 shrink-0")
+			All { plural(total, "entry") } checked: none have been changed or removed.
+		</p>
+	}
+}

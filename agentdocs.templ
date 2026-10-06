@@ -1,0 +1,253 @@
+package main
+
+import "strings"
+
+func docFormFor(docs []AgentDocForm, kind string) AgentDocForm {
+	for _, d := range docs {
+		if d.Kind == kind {
+			return d
+		}
+	}
+	return AgentDocForm{Kind: kind}
+}
+
+func agentDocHref(code, kind string) string { return "/agents/" + code + "/documents/" + kind }
+
+// agentDocInputs asks for the agent's legal documents. On a new agent
+// the required ones must be filled in; on the agent page, filled-in
+// documents show what's on file and can be replaced.
+templ agentDocInputs(ag Agent, docs []AgentDocForm, isNew bool) {
+	<div class="space-y-3">
+		for _, k := range agentDocKinds {
+			{{ f := docFormFor(docs, k.Key) }}
+			{{ cur, has := ag.Doc(k.Key) }}
+			if !isNew && f.Number == "" && f.Expiry == "" && has {
+				{{ f.Number, f.Expiry = cur.Number, cur.Expiry }}
+			}
+			<fieldset class={ "rounded-xl border p-4", templ.KV("border-rule", !cur.Expired()), templ.KV("border-pen/40 bg-[#FDF1F2]/50", cur.Expired()) }>
+				<legend class="flex flex-wrap items-center gap-2 px-1 text-[15px] font-bold">
+					{ k.Label }
+					if k.Required {
+						<span class="rounded bg-form/10 px-1.5 py-0.5 text-[11px] font-semibold text-form">Required</span>
+					} else {
+						<span class="rounded bg-paper px-1.5 py-0.5 text-[11px] font-semibold text-muted">Optional</span>
+					}
+				</legend>
+				<p class="mb-3 text-[13px] text-muted">{ k.Help }</p>
+				if has {
+					<p class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+						<a href={ templ.SafeURL(agentDocHref(ag.Code, k.Key)) } target="_blank" rel="noopener" hx-boost="false" class={ linkCls + " inline-flex items-center gap-1.5" }>
+							@icon("id", "size-4")
+							View document
+						</a>
+						<span class="text-muted">uploaded { cur.Uploaded }</span>
+						if cur.Expired() {
+							<b class="text-pen">Expired { cur.Expiry }</b>
+						} else if cur.Expiry != "" {
+							<span class="text-muted">expires { cur.Expiry }</span>
+						}
+					</p>
+				}
+				<div class="grid gap-3 sm:grid-cols-2">
+					@field(numberLabel(k.NeedsNumber)) {
+						<input name={ "doc_" + k.Key + "_number" } value={ f.Number } maxlength="30" autocomplete="off" spellcheck="false" autocapitalize="characters" required?={ isNew && k.NeedsNumber } class={ inputCls + " uppercase" }/>
+					}
+					@field("Expiry date (optional)") {
+						<input type="date" name={ "doc_" + k.Key + "_expiry" } value={ f.Expiry } class={ inputCls }/>
+					}
+					<div class="sm:col-span-2">
+						<span class="mb-1.5 block text-[13px] font-semibold text-muted">
+							if has {
+								Replace with a new photo or scan
+							} else {
+								Photo or scan (JPEG, PNG or PDF, up to 5 MB)
+							}
+						</span>
+						<input
+							type="file"
+							name={ "doc_" + k.Key + "_file" }
+							accept="image/jpeg,image/png,application/pdf"
+							required?={ isNew && k.Required }
+							class="block w-full text-sm text-muted file:mr-3 file:h-10 file:cursor-pointer file:rounded-lg file:border file:border-rule file:bg-white file:px-4 file:text-[15px] file:font-semibold file:text-ink hover:file:bg-form/5"
+						/>
+					</div>
+				</div>
+			</fieldset>
+		}
+	</div>
+}
+
+func numberLabel(required bool) string {
+	if required {
+		return "Number"
+	}
+	return "Number (if it has one)"
+}
+
+// verifyBadge is an agent's verification state.
+templ verifyBadge(a Agent) {
+	switch {
+		case a.Pending():
+			<span class="inline-flex h-6 items-center gap-1 rounded-full bg-[#FFF6E5] px-2.5 text-xs font-bold text-[#9A6200]">
+				@icon("clock", "size-3.5")
+				Waiting for verification
+			</span>
+		case a.Rejected():
+			<span class="inline-flex h-6 items-center rounded-full bg-[#FDF1F2] px-2.5 text-xs font-bold text-pen-dark">Rejected</span>
+		case a.NeedsReview:
+			<span class="inline-flex h-6 items-center gap-1 rounded-full bg-[#FFF6E5] px-2.5 text-xs font-bold text-[#9A6200]">
+				@icon("clock", "size-3.5")
+				Documents to review
+			</span>
+		case len(a.MissingDocs()) > 0:
+			<span class="inline-flex h-6 items-center rounded-full bg-[#FDF1F2] px-2.5 text-xs font-bold text-pen-dark" title={ "Missing: " + strings.Join(a.MissingDocs(), ", ") }>Documents missing</span>
+		case len(a.ExpiredDocs()) > 0:
+			<span class="inline-flex h-6 items-center rounded-full bg-[#FDF1F2] px-2.5 text-xs font-bold text-pen-dark" title={ "Expired: " + strings.Join(a.ExpiredDocs(), ", ") }>Document expired</span>
+		default:
+			<span class="inline-flex h-6 items-center gap-1 rounded-full bg-[#EEF8F2] px-2.5 text-xs font-bold text-ok">
+				@icon("shield", "size-3.5")
+				Verified
+			</span>
+	}
+}
+
+// verifyBanner explains where the agent stands, with Verify and Reject
+// for an admin or manager who may decide.
+templ verifyBanner(a Agent) {
+	{{ me := userOf(ctx) }}
+	if a.Waiting() || a.Rejected() || len(a.MissingDocs()) > 0 || len(a.ExpiredDocs()) > 0 {
+		{{ red := a.Rejected() || (a.Verified() && !a.NeedsReview) }}
+		<div class={ "mb-4 rounded-xl border px-4 py-3 text-[15px]", templ.KV("border-[#F0D9A8] bg-[#FFF8EA] text-[#7A5200]", !red), templ.KV("border-pen/30 bg-[#FDF1F2] text-pen-dark", red) } role="status">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div>
+					switch {
+						case a.Pending():
+							<p>
+								<b>Waiting for verification.</b>
+								Added by { a.CreatedByName } { when(a.CreatedAt) }. Its owners and sellers can't sign in until another admin or manager checks the documents and verifies it.
+							</p>
+						case a.Rejected():
+							<p><b>Rejected</b> by { a.VerifiedByName } { when(a.VerifiedAt) }: { a.RejectReason }. Upload corrected documents below to ask again.</p>
+						case a.NeedsReview:
+							<p><b>Documents changed</b> { when(a.DocsAt) }. The agent keeps working; an admin or manager should review the new documents.</p>
+						case len(a.MissingDocs()) > 0:
+							<p><b>Documents missing:</b> { strings.Join(a.MissingDocs(), ", ") }. This agent was added before documents were asked for; upload them below.</p>
+						default:
+							<p><b>Expired:</b> { strings.Join(a.ExpiredDocs(), ", ") }. Upload a valid one below.</p>
+					}
+					if m := a.MissingDocs(); len(m) > 0 && a.Waiting() {
+						<p class="mt-1 text-sm">Still missing: { strings.Join(m, ", ") }.</p>
+					}
+				</div>
+				if me.MayVerify(a) {
+					<div class="flex shrink-0 gap-2">
+						@verifyLink(a, "reject", secondaryBtn+" h-10 text-pen-dark")
+						@verifyLink(a, "verify", primaryBtn+" h-10 bg-ok hover:bg-[#11603A]")
+					</div>
+				} else if a.Waiting() {
+					<p class="text-sm">Someone other than you has to verify it.</p>
+				}
+			</div>
+		</div>
+	}
+}
+
+templ verifyLink(a Agent, action, cls string) {
+	{{ href := "/agents/" + a.Code + "/" + action }}
+	<a href={ templ.SafeURL(href) } hx-get={ href } hx-target="#modal" hx-swap="innerHTML" hx-push-url="false" class={ cls }>
+		if action == "verify" {
+			@icon("check", "size-5")
+			if a.NeedsReview {
+				Reviewed
+			} else {
+				Verify
+			}
+		} else {
+			Reject
+		}
+	</a>
+}
+
+templ VerifyAgentDialog(a Agent, action, reason string, errs []string, ret string) {
+	@modalShell(verifyTitle(a, action)) {
+		@VerifyAgentForm(a, action, reason, errs, ret)
+	}
+}
+
+func verifyTitle(a Agent, action string) string {
+	switch {
+	case action == "reject":
+		return "Reject agent " + a.Code + "?"
+	case a.NeedsReview:
+		return "Mark the new documents of " + a.Code + " as reviewed?"
+	}
+	return "Verify agent " + a.Code + "?"
+}
+
+templ VerifyAgentForm(a Agent, action, reason string, errs []string, ret string) {
+	{{ submit := "Verify" }}
+	if action == "reject" {
+		{{ submit = "Reject" }}
+	} else if a.NeedsReview {
+		{{ submit = "Mark reviewed" }}
+	}
+	@modalForm("verify-agent-form", "/agents/"+a.Code+"/"+action, ret, submit, action == "reject") {
+		@errorBox(errs)
+		<ul class="divide-y divide-rule/70 rounded-xl border border-rule text-[15px]">
+			<li class="flex justify-between gap-3 px-4 py-2.5"><span class="text-muted">Agent</span><b>{ a.Code }, { a.Name }</b></li>
+			<li class="flex justify-between gap-3 px-4 py-2.5"><span class="text-muted">Owner</span><span>{ a.Owner }</span></li>
+			for _, d := range a.Docs {
+				<li class="flex items-center justify-between gap-3 px-4 py-2.5">
+					<span class="text-muted">{ agentDocLabel(d.Type) }</span>
+					<a href={ templ.SafeURL(agentDocHref(a.Code, d.Type)) } target="_blank" rel="noopener" hx-boost="false" class={ linkCls + " text-right" }>
+						if d.Number != "" {
+							{ d.Number }
+						} else {
+							View
+						}
+					</a>
+				</li>
+			}
+		</ul>
+		if action == "verify" {
+			<p class="text-[15px] text-muted">
+				Open each document and check it matches the business and its owner. Verifying lets the agent's owners and sellers sign in.
+			</p>
+		} else {
+			@field("Why? (shown on the agent's page)") {
+				<input name="reason" value={ reason } required maxlength="200" placeholder="e.g. The TIN certificate is for another business" class={ inputCls }/>
+			}
+		}
+	}
+}
+
+// agentsToVerify is the agents section of the Approvals page.
+templ agentsToVerify(list []Agent) {
+	<section class="mb-6 overflow-hidden rounded-2xl border border-rule bg-white">
+		<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Agents to verify <span class="ml-1 text-pen">({ len(list) })</span></h2>
+		<ul class="divide-y divide-rule/70">
+			for _, a := range list {
+				<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
+					<a href={ templ.SafeURL("/agents/" + a.Code) } class="flex min-w-0 items-center gap-3">
+						<span class="grid h-11 min-w-11 shrink-0 place-items-center rounded-lg border-2 border-pen/60 px-2 pt-1 font-hand text-2xl leading-none text-pen">{ a.Code }</span>
+						<span class="min-w-0">
+							<span class="block truncate font-bold hover:text-form">{ a.Name }</span>
+							<span class="block text-sm text-muted">
+								Owner { a.Owner } ·
+								if a.NeedsReview {
+									documents changed { when(a.DocsAt) }
+								} else {
+									added by { a.CreatedByName } { when(a.CreatedAt) }
+								}
+							</span>
+						</span>
+					</a>
+					<div class="flex shrink-0 gap-2">
+						@verifyLink(a, "reject", secondaryBtn+" h-10 text-pen-dark")
+						@verifyLink(a, "verify", primaryBtn+" h-10 bg-ok hover:bg-[#11603A]")
+					</div>
+				</li>
+			}
+		</ul>
+	</section>
+}

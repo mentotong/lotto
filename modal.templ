@@ -1,0 +1,170 @@
+package main
+
+// modalShell is the dialog frame: a centered panel on larger screens and
+// a sheet that slides up from the bottom on phones. static/modal.js opens
+// it when htmx puts it into #modal, and removes it when it closes.
+templ modalShell(title string) {
+	<dialog
+		aria-labelledby="modal-title"
+		class="m-auto max-h-[min(92dvh,52rem)] w-[min(94vw,38rem)] overflow-hidden rounded-2xl border border-rule bg-white p-0 text-ink shadow-2xl backdrop:bg-ink/55 backdrop:backdrop-blur-[2px] open:flex open:flex-col max-sm:mb-0 max-sm:mt-auto max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0"
+	>
+		<div class="flex shrink-0 items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-5">
+			<h2 id="modal-title" class="text-[17px] font-bold">{ title }</h2>
+			<button type="button" data-modal-close class="grid size-9 place-items-center rounded-lg text-muted hover:bg-paper hover:text-ink" aria-label="Close">
+				@icon("x", "size-5")
+			</button>
+		</div>
+		{ children... }
+	</dialog>
+}
+
+// StandaloneForm shows a create form as a normal page, for when its
+// address is opened directly instead of through the dialog.
+templ StandaloneForm(title string, form templ.Component) {
+	@pageHead(title, "")
+	<section class="flex max-w-2xl flex-col overflow-hidden rounded-2xl border border-rule bg-white">
+		@form
+	</section>
+}
+
+// modalForm is the shared layout of a create form: scrolling fields and a
+// footer with Cancel and the main action that stays in view.
+templ modalForm(id, action, ret, submit string, danger bool) {
+	@modalFormEnc(id, action, ret, submit, danger, false) {
+		{ children... }
+	}
+}
+
+// modalFormEnc is modalForm that can also send files (multipart).
+templ modalFormEnc(id, action, ret, submit string, danger, multipart bool) {
+	<form
+		id={ id }
+		method="post"
+		action={ templ.SafeURL(action) }
+		if multipart {
+			enctype="multipart/form-data"
+			hx-encoding="multipart/form-data"
+		}
+		hx-post={ action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disabled-elt="find button[type=submit]"
+		class="flex min-h-0 flex-1 flex-col"
+	>
+		if ret != "" {
+			<input type="hidden" name="return" value={ ret }/>
+		}
+		<div class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5">
+			{ children... }
+		</div>
+		<div class="flex shrink-0 justify-end gap-3 border-t border-rule bg-paper/60 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+			<a href={ templ.SafeURL(cancelHref(ret, action)) } data-modal-close class={ secondaryBtn }>Cancel</a>
+			if danger {
+				<button type="submit" class={ primaryBtn + " min-w-32 bg-pen hover:bg-pen-dark" }>{ submit }</button>
+			} else {
+				<button type="submit" class={ primaryBtn + " min-w-32" }>{ submit }</button>
+			}
+		</div>
+	</form>
+}
+
+// modalFormButtons is modalForm with its own buttons after Cancel
+// (e.g. "Save draft" and "Publish").
+templ modalFormButtons(id, action string, buttons templ.Component) {
+	<form
+		id={ id }
+		method="post"
+		action={ templ.SafeURL(action) }
+		hx-post={ action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disabled-elt="find button[type=submit]"
+		class="flex min-h-0 flex-1 flex-col"
+	>
+		<div class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5">
+			{ children... }
+		</div>
+		<div class="flex shrink-0 flex-wrap justify-end gap-3 border-t border-rule bg-paper/60 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+			<a href={ templ.SafeURL(action) } data-modal-close class={ secondaryBtn + " max-sm:hidden" }>Cancel</a>
+			@buttons
+		</div>
+	</form>
+}
+
+func cancelHref(ret, action string) string {
+	if ret != "" {
+		return ret
+	}
+	return action
+}
+
+// --- Users -----------------------------------------------------------------
+
+templ NewUserDialog(f UserForm, agents []Agent, errs []string, ret string) {
+	@modalShell(addUserTitle(userOf(ctx))) {
+		@NewUserForm(f, agents, errs, ret)
+	}
+}
+
+templ NewUserForm(f UserForm, agents []Agent, errs []string, ret string) {
+	{{ submit := "Add user" }}
+	if userOf(ctx).NeedsApproval() {
+		{{ submit = "Send for approval" }}
+	}
+	@modalFormEnc("new-user-form", "/users", ret, submit, false, true) {
+		if userOf(ctx).NeedsApproval() {
+			<div class="rounded-xl border border-[#F0D9A8] bg-[#FFF8EA] px-4 py-3 text-[15px] text-[#7A5200]">
+				A manager or admin must approve the new seller before they can sign in.
+			</div>
+		}
+		if len(agents) == 0 && userOf(ctx).PicksAgent() {
+			<div class="rounded-xl border border-[#F0D9A8] bg-[#FFF8EA] px-4 py-3 text-[15px] text-[#7A5200]">
+				Sellers must belong to an agent. <a href="/agents" class={ linkCls }>Add an agent first.</a>
+			</div>
+		}
+		@errorBox(errs)
+		@newUserFields(f, agents, true)
+	}
+}
+
+// --- Agents ----------------------------------------------------------------
+
+templ NewAgentDialog(f AgentForm, docs []AgentDocForm, errs []string) {
+	@modalShell("Add an agent") {
+		@NewAgentForm(f, docs, errs)
+	}
+}
+
+// NewAgentForm asks for the agent's details and its legal documents.
+// The agent then waits for another admin or manager to verify it.
+templ NewAgentForm(f AgentForm, docs []AgentDocForm, errs []string) {
+	@modalFormEnc("new-agent-form", "/agents", "", "Add agent", false, true) {
+		<p class="text-sm text-muted">An agent is a sales point. Its code is printed on every ticket it sells and can't be changed later.</p>
+		@errorBox(errs)
+		if len(errs) > 0 {
+			<p class="text-sm font-semibold text-pen-dark">For safety, browsers forget chosen files after an error: choose the documents again.</p>
+		}
+		@agentFields(f, true)
+		<div>
+			<h3 class="text-[15px] font-bold text-form">Legal documents</h3>
+			<p class="mb-3 mt-1 text-sm text-muted">Another admin or manager checks these and verifies the agent. Until then its owners and sellers can't sign in.</p>
+			@agentDocInputs(Agent{}, docs, true)
+		</div>
+	}
+}
+
+// openModal is an "Add …" button that loads a form into the dialog.
+// Without JavaScript it's a plain link to the form page.
+templ openModal(href, label, cls string) {
+	<a
+		href={ templ.SafeURL(href) }
+		hx-get={ href }
+		hx-target="#modal"
+		hx-swap="innerHTML"
+		hx-push-url="false"
+		class={ cls }
+	>
+		@icon("plus", "size-5")
+		{ label }
+	</a>
+}

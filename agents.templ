@@ -1,0 +1,224 @@
+package main
+
+import "fmt"
+
+// agentUsersShown is how many users an agent's page lists before "See all".
+const agentUsersShown = 10
+
+templ agentFields(f AgentForm, isNew bool) {
+	<div class="grid gap-4 sm:grid-cols-2">
+		if isNew {
+			@field("Code, printed on tickets") {
+				<input name="code" value={ f.Code } required maxlength="10" pattern="[A-Za-z0-9]{1,10}" placeholder="AV" autocomplete="off" autocapitalize="characters" spellcheck="false" class={ inputCls + " uppercase" }/>
+			}
+		}
+		@field("Business name") {
+			<input name="name" value={ f.Name } required maxlength="80" placeholder="Kiosk Mercado Lama" class={ inputCls }/>
+		}
+		@field("Owner's full name") {
+			<input name="owner" value={ f.Owner } required?={ isNew || f.Owner != "" } maxlength="80" autocomplete="off" class={ inputCls }/>
+		}
+		@field("Phone") {
+			<input name="phone" value={ f.Phone } type="tel" maxlength="30" placeholder="+670" class={ inputCls }/>
+		}
+		<div class={ templ.KV("sm:col-span-2", !isNew) }>
+			@field("Address") {
+				<input name="address" value={ f.Address } maxlength="200" class={ inputCls }/>
+			}
+		</div>
+	</div>
+}
+
+templ AgentsPage(list AgentList) {
+	@pageHead("Agents", "Sales points. Each seller belongs to one agent, and every ticket carries its agent code.") {
+		@openModal("/agents/new", "Add an agent", primaryBtn)
+	}
+	if list.HasAny {
+		@searchForm("/agents") {
+			<div class="grid gap-3 lg:flex lg:items-end">
+				<div class="min-w-0 lg:flex-1">
+					<span class="mb-1.5 block text-[13px] font-semibold text-muted">Search</span>
+					@searchBox(list.Q.Search.Raw, "Code, name, owner, phone, address or document number", "Search agents")
+				</div>
+				<div class="grid grid-cols-2 gap-3 lg:w-80">
+					@filterSelect("status", "Status") {
+						<option value="">All</option>
+						<option value="active" selected?={ list.Q.Status == "active" }>Active</option>
+						<option value="disabled" selected?={ list.Q.Status == "disabled" }>Disabled</option>
+						<option value="waiting" selected?={ list.Q.Status == "waiting" }>Waiting for verification</option>
+						<option value="unverified" selected?={ list.Q.Status == "unverified" }>Not verified</option>
+					}
+					@filterSelect("sort", "Sort by") {
+						<option value="">Code</option>
+						<option value="name" selected?={ list.Q.Sort == "name" }>Name</option>
+						<option value="sales" selected?={ list.Q.Sort == "sales" }>Highest sales</option>
+					}
+				</div>
+			</div>
+		}
+	}
+	<div id="results" class="mb-6">
+		if !list.HasAny {
+			<section class="rounded-2xl border border-dashed border-rule bg-white px-5 py-12 text-center">
+				<span class="mx-auto grid size-12 place-items-center rounded-full bg-form/10 text-form">
+					@icon("shop", "size-6")
+				</span>
+				<p class="mt-3 font-semibold">No agents yet</p>
+				<p class="mt-1 text-sm text-muted">Add your first sales point, then its sellers.</p>
+				<div class="mt-5">
+					@openModal("/agents/new", "Add an agent", primaryBtn)
+				</div>
+			</section>
+		} else {
+			<div class="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+				<h2 class="text-[15px] font-bold text-form">{ list.Pager.Summary() } { nounFor(list.Pager.Total, "agent") }</h2>
+				if list.Q.Filtered() {
+					<a href="/agents" class="text-sm font-semibold text-muted hover:text-form">Clear search</a>
+				}
+			</div>
+			if len(list.Items) == 0 {
+				<section class="overflow-hidden rounded-2xl border border-rule bg-white">
+					@noResults("agents", "/agents")
+				</section>
+			} else {
+				<ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+					for _, r := range list.Items {
+						<li>
+							<a href={ templ.SafeURL("/agents/" + r.Code) } class={ "group block h-full rounded-2xl border bg-white p-4 transition hover:border-form/50 sm:p-5", templ.KV("border-rule", r.Active), templ.KV("border-dashed border-rule opacity-70", !r.Active) }>
+								<div class="flex items-center gap-3">
+									<span class="grid h-11 min-w-11 shrink-0 place-items-center rounded-lg border-2 border-pen/60 px-2 pt-1 font-hand text-2xl leading-none text-pen">{ r.Code }</span>
+									<span class="min-w-0 flex-1">
+										<span class="block truncate text-[17px] font-bold group-hover:text-form">{ r.Name }</span>
+										<span class="block truncate text-sm text-muted">
+											if r.Phone != "" {
+												{ r.Phone }
+											} else {
+												No phone
+											}
+										</span>
+									</span>
+								</div>
+								<div class="mt-4 grid grid-cols-3 items-end border-t border-rule/70 pt-3">
+									<div>
+										<div class="text-[13px] text-muted">Sales</div>
+										<div class="font-bold">{ r.Sales.String() }</div>
+									</div>
+									<div>
+										<div class="text-[13px] text-muted">Users</div>
+										<div class="font-bold">{ fmt.Sprint(r.Users) }</div>
+									</div>
+									<div class="justify-self-end pb-0.5">
+										@statusText(r.Active)
+									</div>
+								</div>
+								<div class="mt-3">
+									@verifyBadge(r.Agent)
+								</div>
+							</a>
+						</li>
+					}
+				</ul>
+				if list.Pager.Pages() > 1 {
+					<div class="mt-3 overflow-hidden rounded-2xl border border-rule bg-white">
+						@pager(list.Pager)
+					</div>
+				}
+			}
+		}
+	</div>
+}
+
+templ EditAgentPage(ag Agent, f AgentForm, users []User, errs []string, msg string) {
+	@backLink("/agents", "All agents")
+	<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+		<div class="flex min-w-0 items-center gap-3">
+			<span class="grid h-12 min-w-12 place-items-center rounded-lg border-2 border-pen/60 px-2 pt-1 font-hand text-[28px] leading-none text-pen">{ f.Code }</span>
+			<div class="min-w-0">
+				<h1 class="truncate text-[26px] font-extrabold leading-tight tracking-tight [font-stretch:108%]">{ ag.Name }</h1>
+				<p class="flex flex-wrap items-center gap-2 text-sm text-muted">
+					if ag.Owner != "" {
+						Owner { ag.Owner }
+					}
+					@verifyBadge(ag)
+				</p>
+			</div>
+		</div>
+		<a href={ templ.SafeURL("/tickets?agent=" + f.Code) } class={ secondaryBtn }>
+			@icon("chart", "size-5")
+			View sales
+		</a>
+	</div>
+	@okBox(msg)
+	@errorBox(errs)
+	@verifyBanner(ag)
+	<div class="grid gap-4 lg:grid-cols-[1.4fr_1fr] lg:items-start lg:gap-5">
+		<div class="space-y-4">
+		<form method="post" action={ templ.SafeURL("/agents/" + f.Code) } hx-push-url="false" class="overflow-hidden rounded-2xl border border-rule bg-white">
+			<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Details</h2>
+			<div class="space-y-5 p-4 sm:p-5">
+				@agentFields(f, false)
+				@toggle("active", f.Active, "Agent active", "When disabled, its sellers can't sign in.")
+			</div>
+			<div class="border-t border-rule bg-paper/60 px-4 py-3 sm:px-5">
+				<button type="submit" class={ primaryBtn }>Save changes</button>
+			</div>
+		</form>
+		<form
+			method="post"
+			action={ templ.SafeURL("/agents/" + ag.Code + "/documents") }
+			enctype="multipart/form-data"
+			hx-push-url="false"
+			hx-disabled-elt="find button[type=submit]"
+			class="overflow-hidden rounded-2xl border border-rule bg-white"
+		>
+			<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Legal documents</h2>
+			<div class="p-4 sm:p-5">
+				@agentDocInputs(ag, nil, false)
+			</div>
+			<div class="flex flex-wrap items-center gap-3 border-t border-rule bg-paper/60 px-4 py-3 sm:px-5">
+				<button type="submit" class={ primaryBtn }>Save documents</button>
+				if ag.Verified() && len(ag.Docs) > 0 {
+					<span class="text-[13px] text-muted">Changing a document asks an admin or manager to review it.</span>
+				}
+			</div>
+		</form>
+		</div>
+		<section class="overflow-hidden rounded-2xl border border-rule bg-white">
+			<div class="flex items-center justify-between gap-3 border-b border-rule px-4 py-2 sm:px-5">
+				<h2 class="py-1 text-[15px] font-bold text-form">Users at this agent</h2>
+				@openModal("/users/new?agent="+f.Code, "Add seller", "inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-form hover:bg-form/5 [&>svg]:size-4")
+			</div>
+			if len(users) == 0 {
+				<p class="px-5 py-8 text-center text-sm text-muted">No users yet.</p>
+			} else {
+				<ul class="divide-y divide-rule/70">
+					for i, u := range users {
+						if i < agentUsersShown {
+						<li>
+							<a href={ templ.SafeURL("/users/" + u.Username) } class="flex items-center gap-3 px-4 py-3 transition hover:bg-paper/70 sm:px-5">
+								@avatar(u.Name, !u.Active)
+								<span class="min-w-0 flex-1">
+									<span class={ "block truncate font-semibold", templ.KV("text-muted", !u.Active) }>{ u.Name }</span>
+									<span class="block truncate text-sm text-muted">
+										{ u.Username }
+										if !u.Active {
+											(disabled)
+										}
+									</span>
+								</span>
+								@roleBadge(u.Role)
+							</a>
+						</li>
+						}
+					}
+				</ul>
+				if len(users) > agentUsersShown {
+					<a href={ templ.SafeURL("/users?agent=" + f.Code) } class="flex items-center justify-between border-t border-rule bg-paper/60 px-4 py-3 text-sm font-semibold text-form hover:bg-form/5 sm:px-5">
+						See all { fmt.Sprint(len(users)) } users
+						@icon("chev-right", "size-4")
+					</a>
+				}
+			}
+		</section>
+	</div>
+}

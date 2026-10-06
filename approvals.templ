@@ -1,0 +1,204 @@
+package main
+
+import "fmt"
+
+// ApprovalsPage lists what the signed-in user may approve (managers,
+// admins) and the requests they made themselves (owners).
+templ ApprovalsPage(v ApprovalsView) {
+	{{ me := userOf(ctx) }}
+	if me.Can(PermApprove) {
+		@pageHead("Approvals", approvalsHelp(me))
+		if len(v.Agents) > 0 {
+			@agentsToVerify(v.Agents)
+		}
+		<section class="mb-6 overflow-hidden rounded-2xl border border-rule bg-white">
+			<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">
+				Waiting for you
+				if len(v.Waiting) > 0 {
+					<span class="ml-1 text-pen">({ fmt.Sprint(len(v.Waiting)) })</span>
+				}
+			</h2>
+			if len(v.Waiting) == 0 {
+				<div class="px-5 py-12 text-center">
+					<span class="mx-auto grid size-12 place-items-center rounded-full bg-ok/10 text-ok">
+						@icon("check", "size-6")
+					</span>
+					<p class="mt-3 font-semibold">Nothing to approve</p>
+					<p class="mt-1 text-sm text-muted">New sellers and changes that sellers ask for show up here.</p>
+				</div>
+			} else {
+				<ul class="divide-y divide-rule/70">
+					for _, t := range v.Waiting {
+						@requestCard(t, true)
+					}
+				</ul>
+			}
+		</section>
+		if len(v.Mine) > 0 {
+			@myRequests(v.Mine)
+		}
+	} else {
+		@pageHead("My requests", "Sellers you added and changes you made at agent "+me.AgentCode+". A manager or admin approves them.") {
+			@openModal("/users/new", "Add a seller", primaryBtn)
+		}
+		@myRequests(v.Mine)
+	}
+}
+
+// lastChangeMine is true when the row is about a change me asked for that
+// has been decided (and no newer one is waiting).
+func lastChangeMine(t, me User) bool {
+	return t.Change == nil && t.LastChange != nil && t.LastChange.By == me.Username && t.LastChange.At.After(t.RequestedAt)
+}
+
+func approvalsHelp(u User) string {
+	return "Sellers added by agent owners, and changes owners made to them. Check the ID document before approving."
+}
+
+// requestCard is one request: a new user or a change, with the ID
+// document and, for approvers, Approve and Reject.
+templ requestCard(t User, decide bool) {
+	{{ me := userOf(ctx) }}
+	{{ isNew := t.Pending() }}
+	<li class="px-4 py-4 sm:px-5">
+		<div class="flex flex-wrap items-start justify-between gap-3">
+			<div class="flex min-w-0 items-start gap-3">
+				@avatar(t.Name, false)
+				<div class="min-w-0">
+					<p class="flex flex-wrap items-center gap-2">
+						<a href={ templ.SafeURL("/users/" + t.Username) } class="font-bold hover:text-form hover:underline">{ t.Name }</a>
+						<span class="text-sm text-muted">{ t.Username }</span>
+						@roleBadge(t.Role)
+						if t.AgentCode != "" {
+							@agentCode(t.AgentCode)
+						}
+					</p>
+					if isNew {
+						<p class="mt-1 text-sm"><b class="text-[#9A6200]">New { t.Role.Label() }</b> · asked for by { t.RequestedByName } { when(t.RequestedAt) }</p>
+					} else if t.Change != nil {
+						<p class="mt-1 text-sm"><b class="text-[#9A6200]">Changes</b> · asked for by { t.Change.ByName } { when(t.Change.At) }</p>
+						<p class="mt-1 text-[15px] font-semibold [overflow-wrap:anywhere]">{ t.Change.Describe(t) }</p>
+					}
+					{{ doc := t.ID }}
+					{{ href := docHref(t) }}
+					if !isNew && t.Change != nil {
+						{{ doc = t.Change.ID }}
+						if t.Change.ID.File != t.ID.File {
+							{{ href = docHref(t) + "?change=1" }}
+						}
+					}
+					<p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+						<span class="inline-flex items-center gap-1.5 text-muted">
+							@icon("id", "size-4")
+							{ doc.Summary() }
+						</span>
+						if doc.File != "" && me.SeesDocument(t) {
+							<a href={ templ.SafeURL(href) } target="_blank" rel="noopener" hx-boost="false" class={ linkCls }>View document</a>
+						}
+					</p>
+				</div>
+			</div>
+			if decide {
+				@decideButtons(t, "/approvals")
+			}
+		</div>
+	</li>
+}
+
+// myRequests lists what the signed-in user asked for and how it went.
+templ myRequests(list []User) {
+	<section class="overflow-hidden rounded-2xl border border-rule bg-white">
+		<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Your requests</h2>
+		if len(list) == 0 {
+			<p class="px-5 py-12 text-center text-muted">You haven't asked for anything in the last 30 days.</p>
+		} else {
+			<ul class="divide-y divide-rule/70">
+				for _, t := range list {
+					<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+						<div class="min-w-0">
+							<a href={ templ.SafeURL("/users/" + t.Username) } class="font-semibold hover:text-form hover:underline">{ t.Name }</a>
+							<span class="text-sm text-muted">{ t.Username }</span>
+							<p class="text-sm text-muted">
+								if t.Change != nil {
+									Changes: { t.Change.Describe(t) }
+								} else if lastChangeMine(t, userOf(ctx)) {
+									Changes: { t.LastChange.Describe }
+								} else {
+									New { t.Role.Label() }, asked for { when(t.RequestedAt) }
+								}
+							</p>
+						</div>
+						switch {
+							case t.Pending() || t.Change != nil:
+								<span class="inline-flex h-7 items-center gap-1.5 rounded-full bg-[#FFF6E5] px-3 text-sm font-semibold text-[#9A6200]">
+									@icon("clock", "size-4")
+									Waiting
+								</span>
+							case lastChangeMine(t, userOf(ctx)) && !t.LastChange.Approved:
+								<span class="inline-flex min-h-7 items-center rounded-full bg-[#FDF1F2] px-3 text-sm font-semibold text-pen-dark">Rejected: { t.LastChange.Reason }</span>
+							case t.Rejected():
+								<span class="inline-flex min-h-7 items-center rounded-full bg-[#FDF1F2] px-3 text-sm font-semibold text-pen-dark" title={ t.RejectReason }>Rejected: { t.RejectReason }</span>
+							default:
+								<span class="inline-flex h-7 items-center gap-1.5 rounded-full bg-[#EEF8F2] px-3 text-sm font-semibold text-ok">
+									@icon("check", "size-4")
+									Approved
+								</span>
+						}
+					</li>
+				}
+			</ul>
+		}
+	</section>
+}
+
+// DecideDialog confirms approving, or asks why when rejecting.
+templ DecideDialog(t User, action, reason string, errs []string, ret string) {
+	@modalShell(decideTitle(t, action)) {
+		@DecideForm(t, action, reason, errs, ret)
+	}
+}
+
+func decideTitle(t User, action string) string {
+	what := "the changes to " + t.Name
+	if t.Pending() {
+		what = t.Name + " as a new " + t.Role.Label()
+	}
+	if action == "approve" {
+		return "Approve " + what + "?"
+	}
+	return "Reject " + what + "?"
+}
+
+templ DecideForm(t User, action, reason string, errs []string, ret string) {
+	{{ submit := "Approve" }}
+	if action == "reject" {
+		{{ submit = "Reject" }}
+	}
+	@modalForm("decide-form", "/users/"+t.Username+"/"+action, ret, submit, action == "reject") {
+		@errorBox(errs)
+		<ul class="divide-y divide-rule/70 rounded-xl border border-rule text-[15px]">
+			<li class="flex justify-between gap-3 px-4 py-2.5"><span class="text-muted">User</span><b>{ t.Name } ({ t.Username })</b></li>
+			<li class="flex justify-between gap-3 px-4 py-2.5"><span class="text-muted">Role</span><span>{ t.Role.Label() }{ agentSuffix(t.AgentCode) }</span></li>
+			if t.Pending() {
+				<li class="flex justify-between gap-3 px-4 py-2.5"><span class="text-muted">ID</span><span class="text-right">{ t.ID.Summary() }</span></li>
+				<li class="flex justify-between gap-3 px-4 py-2.5"><span class="text-muted">Asked for by</span><span>{ t.RequestedByName }</span></li>
+			} else if t.Change != nil {
+				<li class="px-4 py-2.5"><span class="text-muted">Changes</span><p class="mt-1 font-semibold">{ t.Change.Describe(t) }</p></li>
+				<li class="flex justify-between gap-3 px-4 py-2.5"><span class="text-muted">Asked for by</span><span>{ t.Change.ByName }</span></li>
+			}
+		</ul>
+		if action == "approve" {
+			<p class="text-[15px] text-muted">
+				if t.Pending() {
+					Check the ID document matches the person first. Once approved, { t.Name } can sign in.
+				} else {
+					The changes are saved straight away.
+				}
+			</p>
+		} else {
+			@field("Why? (the person who asked sees this)") {
+				<input name="reason" value={ reason } required maxlength="200" placeholder="e.g. The ID photo is unreadable" class={ inputCls }/>
+			}
+		}
+	}
+}

@@ -1,0 +1,161 @@
+package main
+
+import "fmt"
+
+// authShell centers a small form on the page for sign-in and setup.
+templ authShell(title, sub string) {
+	<div class="mx-auto max-w-sm pt-2 sm:pt-10">
+		<div class="overflow-hidden rounded-2xl border border-rule bg-white shadow-[0_18px_40px_-24px_rgb(23_32_59/0.45)]">
+			<div class="bg-form px-6 pb-5 pt-6 text-white">
+				@logoMark("size-10 rounded-lg", "size-6")
+				<h1 class="mt-4 text-2xl font-extrabold tracking-tight [font-stretch:108%]">{ title }</h1>
+				if sub != "" {
+					<p class="mt-1 text-[15px] text-white/80">{ sub }</p>
+				}
+			</div>
+			<div class="p-6">
+				{ children... }
+			</div>
+		</div>
+	</div>
+}
+
+templ LoginPage(username, next, errMsg string) {
+	@publicHeader("login")
+	@authShell("Sign in", "Staff only: agents, sellers and admins") {
+		if errMsg != "" {
+			@errorBox([]string{ errMsg })
+		}
+		<form method="post" action="/login" hx-push-url="false" class="space-y-4">
+			<input type="hidden" name="next" value={ next }/>
+			@field("Username") {
+				<input name="username" value={ username } autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus class={ inputCls }/>
+			}
+			@field("Password") {
+				<input type="password" name="password" autocomplete="current-password" required class={ inputCls }/>
+			}
+			<button type="submit" class={ primaryBtn + " w-full" }>Sign in</button>
+		</form>
+		<p class="mt-5 text-center text-sm text-muted">Forgot your password? Ask an admin to reset it.</p>
+	}
+	<p class="mt-6 text-center">
+		<a href="/" class="inline-flex items-center gap-1.5 text-[15px] font-semibold text-form hover:underline">
+			@icon("chev-left", "size-4")
+			Back to results
+		</a>
+	</p>
+}
+
+templ SetupRemote() {
+	@authShell("Setup isn't finished", "") {
+		<p class="text-[15px] leading-relaxed">The first admin account can only be created on the computer running { brand().Name }.</p>
+		<p class="mt-3 text-[15px] leading-relaxed">Open <b class="text-form">localhost:8080/setup</b> there, then come back to this link and sign in.</p>
+	}
+}
+
+templ SetupPage(f UserForm, errs []string) {
+	<div class="mx-auto max-w-lg">
+		@authShell("Welcome to "+brand().Name, "Create the admin account. After that you'll add agents and their sellers.") {
+			@errorBox(errs)
+			<form method="post" action="/setup" hx-push-url="false" class="space-y-5">
+				@newUserFields(f, nil, false)
+				<button type="submit" class={ primaryBtn + " w-full" }>Create admin account</button>
+			</form>
+		}
+	</div>
+}
+
+templ statusText(active bool) {
+	if active {
+		<span class="inline-flex items-center gap-1.5 text-sm text-ok"><span class="size-1.5 rounded-full bg-ok"></span>Active</span>
+	} else {
+		<span class="inline-flex items-center gap-1.5 text-sm text-muted"><span class="size-1.5 rounded-full bg-muted/50"></span>Disabled</span>
+	}
+}
+
+templ avatar(name string, muted bool) {
+	<span class={ "grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold uppercase", templ.KV("bg-form/10 text-form", !muted), templ.KV("bg-paper text-muted", muted) }>{ initial(name) }</span>
+}
+
+templ backLink(href, label string) {
+	<a href={ templ.SafeURL(href) } class="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-muted transition hover:text-form">
+		<svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+		{ label }
+	</a>
+}
+
+// toggle is a checkbox drawn as a switch.
+templ toggle(name string, on bool, label, help string) {
+	<label class="flex cursor-pointer items-start gap-3">
+		<input type="checkbox" name={ name } checked?={ on } class="peer sr-only"/>
+		<span class="relative mt-0.5 h-6 w-10 shrink-0 rounded-full bg-rule transition peer-checked:bg-ok peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-form after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-4"></span>
+		<span>
+			<span class="block font-semibold">{ label }</span>
+			<span class="block text-sm text-muted">{ help }</span>
+		</span>
+	</label>
+}
+
+templ AccountPage(errs []string, saved bool) {
+	{{ u := userOf(ctx) }}
+	@pageHead("My account", "")
+	<div class="grid gap-4 lg:grid-cols-[1fr_1.4fr] lg:items-start lg:gap-5">
+		<section class="overflow-hidden rounded-2xl border border-rule bg-white">
+			<div class="flex items-center gap-4 p-4 sm:p-5">
+				<span class="grid size-14 place-items-center rounded-full bg-pen text-xl font-bold uppercase text-white">{ initial(u.Name) }</span>
+				<div class="min-w-0">
+					<div class="truncate text-lg font-bold">{ u.Name }</div>
+					<div class="text-sm text-muted">{ u.Username }</div>
+				</div>
+			</div>
+			<dl class="divide-y divide-rule/70 border-t border-rule text-[15px]">
+				<div class="flex items-center justify-between px-4 py-3 sm:px-5">
+					<dt class="text-muted">Role</dt>
+					<dd>
+						@roleBadge(u.Role)
+					</dd>
+				</div>
+				<div class="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+					<dt class="text-muted">Agent</dt>
+					<dd class="flex min-w-0 items-center gap-2">
+						if ag := agentOf(ctx); ag.Code != "" {
+							@agentCode(ag.Code)
+							<span class="truncate font-semibold">{ ag.Name }</span>
+						} else {
+							<span class="text-muted">None</span>
+						}
+					</dd>
+				</div>
+			</dl>
+			<form method="post" action="/logout" class="border-t border-rule px-4 py-3 sm:px-5">
+				<button type="submit" class="inline-flex items-center gap-2 text-[15px] font-semibold text-pen hover:underline">
+					@icon("logout", "size-5")
+					Sign out
+				</button>
+			</form>
+		</section>
+		<form method="post" action="/account/password" hx-push-url="false" class="overflow-hidden rounded-2xl border border-rule bg-white">
+			<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Change password</h2>
+			<div class="space-y-4 p-4 sm:p-5">
+				if saved {
+					@okBox("Password changed. Other devices have been signed out.")
+				}
+				@errorBox(errs)
+				@field("Current password") {
+					<input type="password" name="current" required autocomplete="current-password" class={ inputCls }/>
+				}
+				<div class="grid gap-4 sm:grid-cols-2">
+					@field("New password") {
+						<input type="password" name="password" required minlength={ fmt.Sprint(MinPasswordLen) } autocomplete="new-password" class={ inputCls }/>
+					}
+					@field("Repeat new password") {
+						<input type="password" name="confirm" required autocomplete="new-password" class={ inputCls }/>
+					}
+				</div>
+			</div>
+			<div class="border-t border-rule bg-paper/60 px-4 py-3 sm:px-5">
+				<button type="submit" class={ primaryBtn }>Change password</button>
+			</div>
+		</form>
+	</div>
+}

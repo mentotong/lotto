@@ -1,0 +1,570 @@
+{
+  "next_id": 14,
+  "branding": {
+    "name": "RUDAL 7984",
+    "tagline": "4D / 3D / 2D",
+    "color": "#103FAD",
+    "accent": "#D0263A",
+    "currency": "$",
+    "currency_after": false,
+    "phone": "",
+    "address": "",
+    "receipt_note": "Keep this receipt. It's needed to claim a prize.",
+    "results_note": "",
+    "start_lines": 2,
+    "max_lines": 50,
+    "session_hours": 12,
+    "updated_at": "2026-10-05T20:08:33.847998163+09:00",
+    "updated_by": "mento"
+  },
+  "settings": {
+    "prices": {
+      "2D": 25,
+      "3D": 25,
+      "4D": 50
+    }
+  },
+  "price_sets": [
+    {
+      "id": 1,
+      "prices": {
+        "2D": 25,
+        "3D": 25,
+        "4D": 50
+      },
+      "note": "Prices in use before price history was kept",
+      "created_at": "2026-10-05T09:30:36.743441893+09:00",
+      "created_by": "System",
+      "active": true,
+      "events": [
+        {
+          "action": "activated",
+          "at": "2026-10-05T09:30:36.743441893+09:00",
+          "by": "System"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "date": "2026-10-05",
+      "first": "1111",
+      "second": "2222",
+      "third": "3333",
+      "starter": [
+        "4444",
+        "5555",
+        "6666",
+        "7777",
+        "8888",
+        "9999",
+        "1000",
+        "1211",
+        "1241",
+        "1232"
+      ],
+      "consolation": [
+        "1313",
+        "1316",
+        "3223",
+        "5252",
+        "5221",
+        "2241",
+        "8369",
+        "0392",
+        "4289",
+        "8080"
+      ],
+      "created_at": "2026-10-05T10:34:42.001213968+09:00",
+      "created_by": "Mento Tong",
+      "updated_at": "2026-10-05T10:34:42.001213968+09:00",
+      "updated_by": "Mento Tong",
+      "events": [
+        {
+          "action": "published",
+          "at": "2026-10-05T10:34:42.001213968+09:00",
+          "by": "Mento Tong"
+        }
+      ]
+    }
+  ],
+  "tickets": [
+    {
+      "id": 1,
+      "serial": "00001",
+      "code": "mr46e3vgpsde",
+      "seller": "",
+      "seller_name": "",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T21:49:12.695916068+09:00",
+      "lines": [
+        {
+          "number": "23",
+          "game": "2D",
+          "qty": 3,
+          "price": 25
+        },
+        {
+          "number": "3128",
+          "game": "4D",
+          "qty": 3,
+          "price": 50
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "serial": "00002",
+      "code": "exnlinkwp23f",
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T22:09:13.372286393+09:00",
+      "lines": [
+        {
+          "number": "7899",
+          "game": "4D",
+          "qty": 5,
+          "price": 50
+        },
+        {
+          "number": "7998",
+          "game": "4D",
+          "qty": 4,
+          "price": 50
+        },
+        {
+          "number": "8879",
+          "game": "4D",
+          "qty": 3,
+          "price": 50
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "serial": "00003",
+      "code": "egbtcxwurefu",
+      "seller": "jcosta",
+      "seller_name": "Januario Costa",
+      "agent_code": "AG",
+      "agent": "Soke Moru",
+      "buyer": "",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T22:37:07.52454812+09:00",
+      "lines": [
+        {
+          "number": "2312",
+          "game": "4D",
+          "qty": 1,
+          "price": 50
+        },
+        {
+          "number": "32",
+          "game": "2D",
+          "qty": 1,
+          "price": 25
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "serial": "00004",
+      "code": "x4m43zwohx6i",
+      "seller": "jcosta",
+      "seller_name": "Januario Costa",
+      "agent_code": "AG",
+      "agent": "Soke Moru",
+      "buyer": "Januario Costa",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T22:42:04.079468629+09:00",
+      "lines": [
+        {
+          "number": "0022",
+          "game": "4D",
+          "qty": 51,
+          "price": 50
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "serial": "00005",
+      "code": "pwcxj7dsfhig",
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T22:46:48.252243743+09:00",
+      "lines": [
+        {
+          "number": "02",
+          "game": "2D",
+          "qty": 4,
+          "price": 25
+        },
+        {
+          "number": "22",
+          "game": "2D",
+          "qty": 4,
+          "price": 25
+        },
+        {
+          "number": "20",
+          "game": "2D",
+          "qty": 4,
+          "price": 25
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "serial": "00006",
+      "code": "uwpscs3qppkx",
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T23:08:30.853197582+09:00",
+      "lines": [
+        {
+          "number": "366",
+          "game": "3D",
+          "qty": 1,
+          "price": 25
+        },
+        {
+          "number": "636",
+          "game": "3D",
+          "qty": 1,
+          "price": 25
+        },
+        {
+          "number": "663",
+          "game": "3D",
+          "qty": 1,
+          "price": 25
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "serial": "00007",
+      "code": "2bvfnoy7twdr",
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "Hantu",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T23:25:21.853699875+09:00",
+      "lines": [
+        {
+          "number": "8890",
+          "game": "4D",
+          "qty": 2,
+          "price": 50
+        },
+        {
+          "number": "0988",
+          "game": "4D",
+          "qty": 3,
+          "price": 50
+        },
+        {
+          "number": "9808",
+          "game": "4D",
+          "qty": 3,
+          "price": 50
+        },
+        {
+          "number": "8998",
+          "game": "4D",
+          "qty": 3,
+          "price": 50
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "serial": "00008",
+      "code": "uqjuvowbn5ky",
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "",
+      "draw_date": "2026-10-04",
+      "sold_at": "2026-10-04T23:33:26.615722514+09:00",
+      "lines": [
+        {
+          "number": "332",
+          "game": "3D",
+          "qty": 5,
+          "price": 25
+        },
+        {
+          "number": "323",
+          "game": "3D",
+          "qty": 4,
+          "price": 25
+        },
+        {
+          "number": "233",
+          "game": "3D",
+          "qty": 4,
+          "price": 25
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "serial": "00009",
+      "code": "w7pacr37sx4y",
+      "price_set": 1,
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "Januario",
+      "draw_date": "2026-10-05",
+      "sold_at": "2026-10-05T12:32:45.943425973+09:00",
+      "lines": [
+        {
+          "number": "22",
+          "game": "2D",
+          "qty": 1,
+          "price": 25
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "serial": "00010",
+      "code": "c6qgbws2rnem",
+      "price_set": 1,
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "Picinini",
+      "draw_date": "2026-10-05",
+      "sold_at": "2026-10-05T12:59:47.451117812+09:00",
+      "lines": [
+        {
+          "number": "03",
+          "game": "2D",
+          "qty": 1,
+          "price": 25
+        },
+        {
+          "number": "30",
+          "game": "2D",
+          "qty": 1,
+          "price": 25
+        },
+        {
+          "number": "33",
+          "game": "2D",
+          "qty": 1,
+          "price": 25
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "serial": "00011",
+      "code": "a4mvshp3725t",
+      "price_set": 1,
+      "seller": "joclina",
+      "seller_name": "Joclina Martins",
+      "agent_code": "AG",
+      "agent": "Soke Moru",
+      "buyer": "",
+      "draw_date": "2026-10-05",
+      "sold_at": "2026-10-05T20:02:31.660702738+09:00",
+      "lines": [
+        {
+          "number": "2366",
+          "game": "4D",
+          "qty": 1,
+          "price": 50
+        },
+        {
+          "number": "6632",
+          "game": "4D",
+          "qty": 1,
+          "price": 50
+        },
+        {
+          "number": "3266",
+          "game": "4D",
+          "qty": 1,
+          "price": 50
+        },
+        {
+          "number": "6263",
+          "game": "4D",
+          "qty": 1,
+          "price": 50
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "serial": "00012",
+      "code": "m6nxi72kouvr",
+      "price_set": 1,
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "",
+      "draw_date": "2026-10-05",
+      "sold_at": "2026-10-05T20:10:02.546720253+09:00",
+      "lines": [
+        {
+          "number": "7348",
+          "game": "4D",
+          "qty": 5,
+          "price": 50
+        },
+        {
+          "number": "8437",
+          "game": "4D",
+          "qty": 5,
+          "price": 50
+        },
+        {
+          "number": "3478",
+          "game": "4D",
+          "qty": 5,
+          "price": 50
+        },
+        {
+          "number": "8743",
+          "game": "4D",
+          "qty": 5,
+          "price": 50
+        },
+        {
+          "number": "4387",
+          "game": "4D",
+          "qty": 5,
+          "price": 50
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "serial": "00013",
+      "code": "gvhkyanhtkug",
+      "price_set": 1,
+      "seller": "mento",
+      "seller_name": "Mento Tong",
+      "agent_code": "",
+      "agent": "",
+      "buyer": "",
+      "draw_date": "2026-10-06",
+      "sold_at": "2026-10-06T03:30:48.431803683+09:00",
+      "lines": [
+        {
+          "number": "36",
+          "game": "2D",
+          "qty": 3,
+          "price": 25
+        },
+        {
+          "number": "63",
+          "game": "2D",
+          "qty": 3,
+          "price": 25
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "mento",
+      "name": "Mento Tong",
+      "role": "admin",
+      "agent_code": "",
+      "password_hash": "pbkdf2-sha256$600000$H4uAdrr4D/+UiQJQXnUgtg$Bp8wT6fEPBD4r08eLVOtd7zNElh2gWYPSiSs+ly9fuU",
+      "active": true,
+      "created_at": "2026-10-04T22:00:32.370917623+09:00",
+      "password_changed_at": "2026-10-04T22:00:32.370917623+09:00"
+    },
+    {
+      "username": "jcosta",
+      "name": "Januario Costa",
+      "role": "owner",
+      "agent_code": "AG",
+      "password_hash": "pbkdf2-sha256$600000$QUdIlNyZWR70K0v2cyr7ow$ZnPIjRfVZbCw6kxpsBpfFgWfn7xVmWsD25NDtb+ZJXk",
+      "active": true,
+      "created_at": "2026-10-04T22:14:29.666138628+09:00",
+      "password_changed_at": "2026-10-04T22:14:29.666138628+09:00"
+    },
+    {
+      "username": "dagae",
+      "name": "Aliu Da'agae",
+      "role": "owner",
+      "agent_code": "TLM",
+      "password_hash": "pbkdf2-sha256$600000$h9Rd9jxVNk+dhYVTafYK+A$+U0Jzczny3hIzmiYEntXJlnPsHBBAOll2v+gClQXr2M",
+      "active": true,
+      "created_at": "2026-10-05T11:28:10.613485838+09:00",
+      "password_changed_at": "2026-10-05T11:28:10.613485838+09:00"
+    },
+    {
+      "username": "joclina",
+      "name": "Joclina Martins",
+      "role": "seller",
+      "agent_code": "AG",
+      "password_hash": "pbkdf2-sha256$600000$VDedM3gbVV1KhXjiLDyGfQ$LDHDGGMFMjGiugiKxbbM2wnfWe4HOhkwO7cndk/fEzg",
+      "active": true,
+      "created_at": "2026-10-05T17:01:24.278389413+09:00",
+      "password_changed_at": "2026-10-05T17:01:24.278389413+09:00",
+      "id_doc": {
+        "type": "bi",
+        "number": "8382839428947289",
+        "expiry": "2030-10-31",
+        "file": "69e8e81ebe45a767aab68b13880489dc.png",
+        "file_type": "image/png",
+        "file_name": "screenshot-2026-10-01_21-15-14.png",
+        "uploaded": "2026-10-05"
+      },
+      "requested_by": "jcosta",
+      "requested_by_name": "Januario Costa",
+      "requested_at": "2026-10-05T17:01:23.880426353+09:00",
+      "decided_by": "mento",
+      "decided_at": "2026-10-05T20:00:59.728798916+09:00"
+    }
+  ],
+  "agents": [
+    {
+      "code": "AG",
+      "name": "Soke Moru",
+      "phone": "+670 7777777",
+      "address": "Taibessi",
+      "active": true,
+      "created_at": "2026-10-04T22:13:43.178009609+09:00"
+    },
+    {
+      "code": "TLM",
+      "name": "Tuku La Munu",
+      "phone": "+670 74848888",
+      "address": "Maslidun",
+      "active": true,
+      "created_at": "2026-10-04T23:22:19.658932215+09:00"
+    }
+  ]
+}

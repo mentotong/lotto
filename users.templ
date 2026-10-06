@@ -1,0 +1,502 @@
+package main
+
+import "fmt"
+
+// newUserFields is shared by first-run setup and "Add a user". withRole
+// adds the role, agent and ID document (setup makes the first admin, who
+// has none of these yet).
+templ newUserFields(f UserForm, agents []Agent, withRole bool) {
+	<div class="grid gap-4 sm:grid-cols-2">
+		@field("Full name") {
+			<input name="name" value={ f.Name } required maxlength="60" autocomplete="off" class={ inputCls }/>
+		}
+		@field("Username") {
+			<input name="username" value={ f.Username } required pattern="[a-z0-9._\-]{3,32}" autocapitalize="none" spellcheck="false" autocomplete="off" placeholder="e.g. maria" class={ inputCls }/>
+		}
+		@field(fmt.Sprintf("Password (at least %d characters)", MinPasswordLen)) {
+			<input type="password" name="password" required minlength={ fmt.Sprint(MinPasswordLen) } autocomplete="new-password" class={ inputCls }/>
+		}
+		@field("Repeat password") {
+			<input type="password" name="confirm" required autocomplete="new-password" class={ inputCls }/>
+		}
+		if withRole {
+			@roleAndAgent(f, agents)
+		}
+	</div>
+	if withRole {
+		@idFields(f.ID, "", true)
+	}
+}
+
+// roleAndAgent shows the role and agent the signed-in user may choose.
+// Owners and sellers only add sellers to their own agent, so for them
+// it's a line of text instead.
+templ roleAndAgent(f UserForm, agents []Agent) {
+	{{ me := userOf(ctx) }}
+	if len(me.AssignableRoles()) > 1 {
+		@roleSelect(f.Role, me.AssignableRoles())
+	} else {
+		<input type="hidden" name="role" value={ string(f.Role) }/>
+	}
+	if me.PicksAgent() {
+		@agentSelect(f.AgentCode, agents)
+	} else {
+		<input type="hidden" name="agent_code" value={ me.AgentCode }/>
+		<div class="rounded-xl border border-rule bg-paper/60 px-4 py-3 text-[15px] sm:col-span-2">
+			{ f.Role.Label() } at agent <b>{ me.AgentCode }</b>, { agentOf(ctx).Name }
+		</div>
+	}
+}
+
+// agentSelect lists active agents, plus the current one if it's disabled
+// so editing a user doesn't silently drop their agent.
+templ agentSelect(current string, agents []Agent) {
+	@field("Agent") {
+		<select name="agent_code" class={ inputCls }>
+			<option value="" selected?={ current == "" }>No agent (admins and managers)</option>
+			for _, ag := range agents {
+				if ag.Active || ag.Code == current {
+					<option value={ ag.Code } selected?={ ag.Code == current }>
+						{ ag.Code }, { ag.Name }
+						if !ag.Active {
+							(disabled)
+						} else if !ag.Verified() {
+							(not verified yet)
+						}
+					</option>
+				}
+			}
+		</select>
+	}
+}
+
+templ roleSelect(role Role, roles []Role) {
+	@field("Role") {
+		<select name="role" class={ inputCls }>
+			for _, r := range roles {
+				<option value={ string(r) } selected?={ role == r }>{ r.Help() }</option>
+			}
+		</select>
+	}
+}
+
+// idFields asks for the user's national ID document. Picking a type shows
+// the number, expiry date and upload. docHref links to the document on
+// file, if there is one.
+templ idFields(f IDForm, docHref string, required bool) {
+	<fieldset class="id-box rounded-xl border border-rule p-4">
+		<legend class="px-1 text-[13px] font-semibold text-muted">
+			ID document
+			if !required {
+				<span class="font-normal">(add one to keep records complete)</span>
+			}
+		</legend>
+		<div class="grid gap-2 sm:grid-cols-3">
+			for _, t := range idTypes {
+				<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-rule bg-white px-3 py-2.5 text-[15px] font-semibold transition hover:border-form/40 has-[:checked]:border-form has-[:checked]:bg-form/5 has-[:checked]:text-form">
+					<input type="radio" name="id_type" value={ t.Key } checked?={ f.Type == t.Key } required?={ required } class="size-4 accent-form"/>
+					{ t.Label }
+				</label>
+			}
+		</div>
+		<div class="id-fields mt-4 gap-4 sm:grid-cols-2">
+			@field("Document number") {
+				<input name="id_number" value={ f.Number } maxlength="30" autocomplete="off" spellcheck="false" autocapitalize="characters" class={ inputCls + " uppercase" }/>
+			}
+			@field("Expiry date (optional)") {
+				<input type="date" name="id_expiry" value={ f.Expiry } class={ inputCls }/>
+			}
+			<div class="sm:col-span-2">
+				<span class="mb-1.5 block text-[13px] font-semibold text-muted">
+					if f.HasFile {
+						Replace the photo or scan (optional)
+					} else {
+						Photo or scan of the document
+					}
+				</span>
+				if f.HasFile && docHref != "" {
+					<a href={ templ.SafeURL(docHref) } target="_blank" rel="noopener" hx-boost="false" class="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-form hover:underline">
+						@icon("id", "size-5")
+						View the document on file
+						if f.FileName != "" {
+							<span class="font-normal text-muted">({ f.FileName })</span>
+						}
+					</a>
+				}
+				<input
+					type="file"
+					name="id_file"
+					accept="image/jpeg,image/png,application/pdf"
+					class="block w-full text-sm text-muted file:mr-3 file:h-10 file:cursor-pointer file:rounded-lg file:border file:border-rule file:bg-white file:px-4 file:text-[15px] file:font-semibold file:text-ink hover:file:bg-form/5"
+				/>
+				<p class="mt-1.5 text-[13px] text-muted">JPEG or PNG photo, or a PDF, up to 5 MB. On a phone you can take the photo now.</p>
+			</div>
+		</div>
+	</fieldset>
+}
+
+templ roleBadge(r Role) {
+	<span
+		class={ "inline-flex h-6 items-center rounded px-2 text-xs font-semibold",
+			templ.KV("bg-form text-white", r == RoleAdmin),
+			templ.KV("bg-form/15 text-form", r == RoleManager),
+			templ.KV("bg-pen/10 text-pen-dark", r == RoleOwner),
+			templ.KV("border border-rule text-muted", r == RoleSeller) }
+	>{ r.Label() }</span>
+}
+
+// userStatus is a user's state: waiting for approval, rejected, active
+// or disabled, and whether a change waits for approval.
+templ userStatus(u User) {
+	switch {
+		case u.Pending():
+			<span class="inline-flex items-center gap-1.5 text-sm font-semibold text-[#9A6200]">
+				@icon("clock", "size-4")
+				Waiting
+			</span>
+		case u.Rejected():
+			<span class="inline-flex items-center gap-1.5 text-sm font-semibold text-pen">
+				@icon("x", "size-4")
+				Rejected
+			</span>
+		case u.Change != nil:
+			<span class="inline-flex items-center gap-1.5 text-sm font-semibold text-[#9A6200]" title="Changes wait for approval">
+				@icon("clock", "size-4")
+				Changes
+			</span>
+		default:
+			@statusText(u.Active)
+	}
+}
+
+templ UsersPage(list UserList, agents []Agent) {
+	{{ me := userOf(ctx) }}
+	@pageHead("Users", usersHelp(me)) {
+		if me.NeedsApproval() {
+			@openModal(newUserHref(list.Q.Agent), "Add a seller", primaryBtn)
+		} else {
+			@openModal(newUserHref(list.Q.Agent), "Add a user", primaryBtn)
+		}
+	}
+	@searchForm("/users") {
+		<div class="grid gap-3 lg:flex lg:items-end">
+			<div class="min-w-0 lg:flex-1">
+				<span class="mb-1.5 block text-[13px] font-semibold text-muted">Search</span>
+				@searchBox(list.Q.Search.Raw, "Name, username, agent or ID number", "Search users")
+			</div>
+			<div class={ "grid gap-3", templ.KV("grid-cols-3 lg:w-[30rem]", me.PicksAgent()), templ.KV("grid-cols-2 lg:w-[20rem]", !me.PicksAgent() && me.Role == RoleOwner), templ.KV("lg:w-44", me.Role == RoleSeller) }>
+				if me.Role != RoleSeller {
+					@filterSelect("role", "Role") {
+						<option value="">All</option>
+						for _, r := range Roles {
+							if me.PicksAgent() || r.NeedsAgent() {
+								<option value={ string(r) } selected?={ list.Q.Role == string(r) }>{ r.Label() }s</option>
+							}
+						}
+					}
+				}
+				if me.PicksAgent() {
+					@filterSelect("agent", "Agent") {
+						<option value="">All</option>
+						<option value="-" selected?={ list.Q.Agent == "-" }>No agent</option>
+						for _, ag := range agents {
+							<option value={ ag.Code } selected?={ ag.Code == list.Q.Agent }>{ ag.Code }, { ag.Name }</option>
+						}
+					}
+				}
+				@filterSelect("status", "Status") {
+					<option value="">All</option>
+					<option value="active" selected?={ list.Q.Status == "active" }>Active</option>
+					<option value="pending" selected?={ list.Q.Status == "pending" }>Waiting for approval</option>
+					<option value="disabled" selected?={ list.Q.Status == "disabled" }>Disabled</option>
+					<option value="rejected" selected?={ list.Q.Status == "rejected" }>Rejected</option>
+				}
+			</div>
+		</div>
+	}
+	<section id="results" class="mb-6 overflow-hidden rounded-2xl border border-rule bg-white">
+		@resultsHead(list.Pager, "user", "/users", list.Q.Filtered())
+		if len(list.Items) == 0 {
+			if list.Q.Filtered() {
+				@noResults("users", "/users")
+			} else {
+				<p class="px-5 py-12 text-center text-muted">No users yet.</p>
+			}
+		} else {
+			<div class="hidden grid-cols-[2.25rem_1fr_7rem_5rem_7rem_3rem] gap-4 border-b border-rule bg-paper/60 px-5 py-2 text-[13px] font-semibold text-muted md:grid">
+				<span></span><span>Name</span><span>Role</span><span>Agent</span><span>Status</span><span></span>
+			</div>
+			<ul class="divide-y divide-rule/70">
+				for _, u := range list.Items {
+					<li>
+						<a href={ templ.SafeURL("/users/" + u.Username) } class={ "grid grid-cols-[2.25rem_1fr_auto] items-center gap-x-3 gap-y-1 px-4 py-3 transition hover:bg-paper/70 sm:px-5 md:grid-cols-[2.25rem_1fr_7rem_5rem_7rem_3rem] md:gap-x-4", templ.KV("bg-[#FFF8EA]/70", u.Pending() || u.Change != nil) }>
+							@avatar(u.Name, !u.CanSignIn())
+							<span class="min-w-0">
+								<span class={ "block truncate font-semibold", templ.KV("text-muted", !u.CanSignIn()) }>
+									{ u.Name }
+									if u.Username == me.Username {
+										<span class="font-normal text-muted">(you)</span>
+									}
+								</span>
+								<span class="block truncate text-sm text-muted">{ u.Username }</span>
+							</span>
+							<span class="md:hidden">
+								@userStatus(u)
+							</span>
+							<span class="col-start-2 col-end-4 flex items-center gap-2 md:col-auto md:contents">
+								<span>
+									@roleBadge(u.Role)
+								</span>
+								<span>
+									if u.AgentCode != "" {
+										@agentCode(u.AgentCode)
+									} else if u.Role.NeedsAgent() {
+										<span class="inline-flex h-6 items-center rounded bg-pen/10 px-2 text-xs font-semibold text-pen" title="Owners and sellers can't sign in without an agent">Needs agent</span>
+									} else {
+										<span class="hidden text-muted md:inline">—</span>
+									}
+								</span>
+							</span>
+							<span class="hidden md:block">
+								@userStatus(u)
+							</span>
+							<span class="hidden text-right text-sm font-semibold text-form md:block">
+								if me.Manages(u) {
+									Edit
+								} else {
+									View
+								}
+							</span>
+						</a>
+					</li>
+				}
+			</ul>
+			@pager(list.Pager)
+		}
+	</section>
+}
+
+func usersHelp(u User) string {
+	switch u.Role {
+	case RoleOwner:
+		return "The people at agent " + u.AgentCode + ". New sellers and changes you make wait for a manager or admin to approve them."
+	case RoleManager:
+		return "Everyone who can sign in, except admins' own settings. Owners and sellers belong to an agent."
+	}
+	return "Everyone who can sign in. Owners and sellers belong to an agent; managers and admins don't need one."
+}
+
+func docHref(u User) string { return "/users/" + u.Username + "/document" }
+
+// EditUserPage shows one user: approval state, details (editable for
+// those who manage them), ID document and password reset.
+templ EditUserPage(t User, f UserForm, agents []Agent, errs []string, msg string) {
+	{{ me := userOf(ctx) }}
+	{{ canEdit := me.Manages(t) && !(me.NeedsApproval() && (t.Pending() || t.Rejected())) }}
+	@backLink("/users", "All users")
+	<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+		<div class="flex min-w-0 items-center gap-3">
+			@avatar(t.Name, !t.CanSignIn())
+			<div class="min-w-0">
+				<h1 class="truncate text-[26px] font-extrabold leading-tight tracking-tight [font-stretch:108%]">{ t.Name }</h1>
+				<p class="flex flex-wrap items-center gap-2 text-sm text-muted">
+					{ t.Username }
+					@roleBadge(t.Role)
+					if t.AgentCode != "" {
+						@agentCode(t.AgentCode)
+					}
+					@userStatus(t)
+				</p>
+			</div>
+		</div>
+		<div class="flex flex-wrap gap-2">
+			if t.Role.NeedsAgent() || t.Role == RoleAdmin {
+				if me.Can(PermSalesAll) || (me.Role == RoleOwner && t.AgentCode == me.AgentCode) {
+					<a href={ templ.SafeURL("/tickets?seller=" + t.Username) } class={ secondaryBtn }>
+						@icon("chart", "size-5")
+						View sales
+					</a>
+				}
+			}
+			if me.Can(PermActivity) {
+				<a href={ templ.SafeURL("/activity?user=" + t.Username) } class={ secondaryBtn }>
+					@icon("pulse", "size-5")
+					Activity
+				</a>
+			}
+		</div>
+	</div>
+	@okBox(msg)
+	@errorBox(errs)
+	@approvalBanner(t)
+	<div class="grid gap-4 lg:grid-cols-[1.4fr_1fr] lg:items-start lg:gap-5">
+		if canEdit {
+			<form
+				method="post"
+				action={ templ.SafeURL("/users/" + t.Username) }
+				enctype="multipart/form-data"
+				hx-push-url="false"
+				hx-disabled-elt="find button[type=submit]"
+				class="overflow-hidden rounded-2xl border border-rule bg-white"
+			>
+				<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Details</h2>
+				<div class="space-y-5 p-4 sm:p-5">
+					if me.NeedsApproval() {
+						<p class="rounded-xl border border-[#F0D9A8] bg-[#FFF8EA] px-4 py-3 text-sm text-[#7A5200]">
+							Changes you make here are sent to a manager or admin and apply once they approve them.
+						</p>
+					}
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div class="sm:col-span-2">
+							@field("Full name") {
+								<input name="name" value={ f.Name } required maxlength="60" class={ inputCls }/>
+							}
+						</div>
+						if !me.NeedsApproval() {
+							@roleAndAgent(f, agents)
+						}
+					</div>
+					@toggle("active", f.Active, "Account active", "Disabled users can't sign in and are signed out right away.")
+					@idFields(f.ID, docHrefIf(me, t), t.ID.Type != "")
+				</div>
+				<div class="border-t border-rule bg-paper/60 px-4 py-3 sm:px-5">
+					if me.NeedsApproval() {
+						<button type="submit" class={ primaryBtn }>Send for approval</button>
+					} else {
+						<button type="submit" class={ primaryBtn }>Save changes</button>
+					}
+				</div>
+			</form>
+		} else {
+			@userFacts(t)
+		}
+		if me.Can(PermPassword) && (me.Manages(t) || me.Username == t.Username) {
+			<form method="post" action={ templ.SafeURL("/users/" + t.Username + "/password") } hx-push-url="false" class="overflow-hidden rounded-2xl border border-rule bg-white">
+				<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Reset password</h2>
+				<div class="space-y-4 p-4 sm:p-5">
+					<p class="text-sm text-muted">Sets a new password and signs this user out on all devices.</p>
+					@field("New password") {
+						<input type="password" name="password" required minlength={ fmt.Sprint(MinPasswordLen) } autocomplete="new-password" class={ inputCls }/>
+					}
+					@field("Repeat new password") {
+						<input type="password" name="confirm" required autocomplete="new-password" class={ inputCls }/>
+					}
+				</div>
+				<div class="border-t border-rule bg-paper/60 px-4 py-3 sm:px-5">
+					<button type="submit" class={ secondaryBtn }>Reset password</button>
+				</div>
+			</form>
+		}
+	</div>
+}
+
+func docHrefIf(me, t User) string {
+	if me.SeesDocument(t) && t.ID.File != "" {
+		return docHref(t)
+	}
+	return ""
+}
+
+// userFacts is the read-only view of a user, for people who may see but
+// not change them.
+templ userFacts(t User) {
+	<section class="overflow-hidden rounded-2xl border border-rule bg-white">
+		<h2 class="border-b border-rule px-4 py-3 text-[15px] font-bold text-form sm:px-5">Details</h2>
+		<dl class="divide-y divide-rule/70 text-[15px]">
+			@fact("Role") {
+				{ t.Role.Help() }
+			}
+			@fact("Agent") {
+				if t.AgentCode != "" {
+					{ t.AgentCode }
+				} else {
+					—
+				}
+			}
+			@fact("ID document") {
+				{ t.ID.Summary() }
+				if t.ID.Expired() {
+					<b class="text-pen">(expired)</b>
+				}
+			}
+			if h := docHrefIf(userOf(ctx), t); h != "" {
+				@fact("Document") {
+					<a href={ templ.SafeURL(h) } target="_blank" rel="noopener" hx-boost="false" class={ linkCls }>View the document</a>
+				}
+			}
+			if !t.RequestedAt.IsZero() && t.RequestedByName != "" {
+				@fact("Added by") {
+					{ t.RequestedByName }, { when(t.RequestedAt) }
+				}
+			}
+		</dl>
+	</section>
+}
+
+templ fact(label string) {
+	<div class="grid grid-cols-[8rem_1fr] gap-3 px-4 py-3 sm:px-5">
+		<dt class="text-sm font-semibold text-muted">{ label }</dt>
+		<dd class="min-w-0 [overflow-wrap:anywhere]">{ children... }</dd>
+	</div>
+}
+
+// approvalBanner says when a new user or a change waits for approval,
+// with Approve and Reject for those who may decide.
+templ approvalBanner(t User) {
+	{{ me := userOf(ctx) }}
+	if t.Pending() {
+		<div class="mb-4 rounded-xl border border-[#F0D9A8] bg-[#FFF8EA] px-4 py-3 text-[15px] text-[#7A5200]" role="status">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<p>
+					<b>Waiting for approval.</b>
+					{ t.RequestedByName } asked to add this { t.Role.Label() } { when(t.RequestedAt) }. They can't sign in until a manager or admin approves.
+				</p>
+				if me.Approves(t, t.RequestedBy) {
+					@decideButtons(t, "/users/"+t.Username)
+				}
+			</div>
+		</div>
+	} else if t.Rejected() {
+		<div class="mb-4 rounded-xl border border-pen/30 bg-[#FDF1F2] px-4 py-3 text-[15px] text-pen-dark" role="status">
+			<b>Rejected</b> { when(t.DecidedAt) }: { t.RejectReason }. This account can't sign in.
+		</div>
+	}
+	if t.Change != nil {
+		<div class="mb-4 rounded-xl border border-[#F0D9A8] bg-[#FFF8EA] px-4 py-3 text-[15px] text-[#7A5200]" role="status">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div>
+					<p><b>Changes waiting for approval</b>, asked for by { t.Change.ByName } { when(t.Change.At) }:</p>
+					<p class="mt-1 font-semibold text-ink">{ t.Change.Describe(t) }</p>
+					if t.Change.ID.File != "" && t.Change.ID.File != t.ID.File && me.SeesDocument(t) {
+						<a href={ templ.SafeURL(docHref(t) + "?change=1") } target="_blank" rel="noopener" hx-boost="false" class={ linkCls + " mt-1 inline-flex items-center gap-1.5 text-sm" }>
+							@icon("id", "size-4")
+							View the new document
+						</a>
+					}
+				</div>
+				if me.Approves(t, t.Change.By) {
+					@decideButtons(t, "/users/"+t.Username)
+				}
+			</div>
+		</div>
+	}
+}
+
+templ decideButtons(t User, ret string) {
+	<div class="flex shrink-0 gap-2">
+		@decideLink(t, "reject", ret, secondaryBtn+" h-10 text-pen-dark")
+		@decideLink(t, "approve", ret, primaryBtn+" h-10 bg-ok hover:bg-[#11603A]")
+	</div>
+}
+
+templ decideLink(t User, action, ret, cls string) {
+	{{ href := "/users/" + t.Username + "/" + action + "?return=" + ret }}
+	<a href={ templ.SafeURL(href) } hx-get={ href } hx-target="#modal" hx-swap="innerHTML" hx-push-url="false" class={ cls }>
+		if action == "approve" {
+			@icon("check", "size-5")
+			Approve
+		} else {
+			Reject
+		}
+	</a>
+}

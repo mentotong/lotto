@@ -1,0 +1,382 @@
+package main
+
+import "fmt"
+
+func resultsURL(date string) templ.SafeURL { return templ.SafeURL("/?date=" + date) }
+
+// drawNav is the date bar: earlier draw, the date, later draw.
+templ drawNav(v ResultsView, label string) {
+	<div class="flex items-center gap-2 bg-form px-2 py-2 text-white sm:px-3">
+		if v.Prev != "" {
+			<a href={ resultsURL(v.Prev) } class="grid size-11 shrink-0 place-items-center rounded-lg transition hover:bg-white/10" aria-label={ "Earlier draw, " + longDate(v.Prev) } title={ longDate(v.Prev) }>
+				@icon("chev-left", "size-6")
+			</a>
+		} else {
+			<span class="grid size-11 shrink-0 place-items-center rounded-lg opacity-30" aria-hidden="true">
+				@icon("chev-left", "size-6")
+			</span>
+		}
+		<form action="/" method="get" hx-get="/" hx-target="#main" hx-push-url="true" hx-trigger="change" class="relative flex min-w-0 flex-1 justify-center">
+			<label class="relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 sm:px-3 transition hover:bg-white/10">
+				<span class="whitespace-nowrap text-[20px] font-extrabold tracking-tight [font-stretch:108%] min-[380px]:text-[22px] sm:text-[26px]">{ label }</span>
+				@icon("calendar", "size-5 opacity-80")
+				<input type="date" name="date" value={ v.Date } aria-label="Pick a draw date" class="absolute inset-0 cursor-pointer opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:size-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"/>
+			</label>
+		</form>
+		if v.Next != "" {
+			<a href={ resultsURL(v.Next) } class="grid size-11 shrink-0 place-items-center rounded-lg transition hover:bg-white/10" aria-label={ "Later draw, " + longDate(v.Next) } title={ longDate(v.Next) }>
+				@icon("chev-right", "size-6")
+			</a>
+		} else {
+			<span class="grid size-11 shrink-0 place-items-center rounded-lg opacity-30" aria-hidden="true">
+				@icon("chev-right", "size-6")
+			</span>
+		}
+	</div>
+}
+
+// prizeRow is one of the three top prizes: a blue label and the number.
+templ prizeRow(label, number string) {
+	<div class="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] gap-2 sm:gap-3">
+		<div class="grid place-items-center rounded-xl bg-form py-3 text-[28px] font-extrabold text-white [font-stretch:110%] sm:text-[36px]">{ label }</div>
+		<div class="grid place-items-center rounded-xl border-2 border-form/15 bg-white py-3 text-[40px] font-extrabold leading-none tracking-[0.06em] text-ink tabular-nums [font-stretch:105%] sm:text-[52px]">{ number }</div>
+	</div>
+}
+
+// numberGroup is the Starter or Consolation block: a heading and ten
+// numbers in two columns.
+templ numberGroup(title string, nums [10]string) {
+	<section class="overflow-hidden rounded-xl border-2 border-form/15 bg-white">
+		<h3 class="bg-form py-2 text-center text-[20px] font-bold text-white sm:text-[24px]">{ title }</h3>
+		<ol class="grid grid-cols-2">
+			for _, n := range nums {
+				<li class="border-b border-rule/60 py-1.5 text-center text-[26px] font-bold tracking-[0.04em] text-ink tabular-nums odd:border-r odd:border-r-rule [&:nth-last-child(-n+2)]:border-b-0 sm:py-2 sm:text-[32px]">{ n }</li>
+			}
+		</ol>
+	</section>
+}
+
+templ ResultsPage(v ResultsView) {
+	{{ u := userOf(ctx) }}
+	if u.Username == "" {
+		// Signed out: the page is public, so it carries its own small header.
+		@publicHeader("results")
+	}
+	<div class="mx-auto max-w-2xl">
+		<div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+			<h1 class="text-[26px] font-extrabold leading-tight tracking-tight [font-stretch:108%] sm:text-[32px]">Results</h1>
+			if u.Can(PermResults) {
+				<div class="flex flex-wrap gap-2">
+					if v.Result != nil {
+						<a href={ templ.SafeURL("/results/new?date=" + v.Date) } hx-get={ "/results/new?date=" + v.Date } hx-target="#modal" hx-push-url="false" class={ secondaryBtn }>
+							@icon("edit", "size-5")
+							if v.Result.Draft {
+								Edit draft
+							} else {
+								Correct
+							}
+						</a>
+					}
+					@openModal("/results/new", "Enter results", primaryBtn)
+				</div>
+			}
+		</div>
+		if v.Result != nil && v.Result.Draft {
+			<div class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F0D9A8] bg-[#FFF8EA] px-4 py-3 text-[#7A5200]" role="status">
+				<div class="flex gap-3">
+					<span class="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-[#C98A00] text-xs font-bold text-white">!</span>
+					<div>
+						<b>Draft, not published.</b> Only admins can see these results. Check them, then publish to show them to everyone.
+					</div>
+				</div>
+				<a href={ templ.SafeURL("/results/" + v.Date + "/publish") } hx-get={ "/results/" + v.Date + "/publish" } hx-target="#modal" hx-push-url="false" class={ primaryBtn + " h-10 bg-ok hover:bg-[#11603A]" }>Publish</a>
+			</div>
+		}
+		<article class={ "overflow-hidden rounded-2xl bg-white shadow-[0_18px_40px_-28px_rgb(23_32_59/0.5)]", templ.KV("border-2 border-dashed border-[#E2B54A]", v.Result != nil && v.Result.Draft), templ.KV("border border-rule", v.Result == nil || !v.Result.Draft) }>
+			if v.Result != nil {
+				@drawNav(v, longDate(v.Date))
+				<div class="space-y-2 bg-paper p-2 sm:space-y-3 sm:p-3">
+					@prizeRow("1st", v.Result.First)
+					@prizeRow("2nd", v.Result.Second)
+					@prizeRow("3rd", v.Result.Third)
+					<div class="grid grid-cols-2 gap-2 pt-1 sm:gap-3">
+						@numberGroup("Starter", v.Result.Starter)
+						@numberGroup("Consolation", v.Result.Consolation)
+					</div>
+				</div>
+			} else if v.Asked != "" {
+				@drawNav(v, longDate(v.Asked))
+				<div class="px-5 py-14 text-center">
+					<p class="text-lg font-bold">No results for this date</p>
+					<p class="mt-1 text-muted">
+						if len(v.Dates) > 0 {
+							Use the arrows to go to the nearest draw, or
+							<a href="/" class={ linkCls }>see the latest results</a>.
+						} else {
+							No results have been published yet.
+						}
+					</p>
+				</div>
+			} else {
+				<div class="px-5 py-16 text-center">
+					<span class="mx-auto grid size-14 place-items-center rounded-full bg-form/10 text-form">
+						@icon("trophy", "size-7")
+					</span>
+					<p class="mt-4 text-lg font-bold">No results yet</p>
+					<p class="mt-1 text-muted">
+						if u.Can(PermResults) {
+							Enter the first draw's results to show them here.
+						} else {
+							Results appear here after each draw.
+						}
+					</p>
+				</div>
+			}
+		</article>
+		if v.Result != nil && u.Can(PermResults) {
+			@resultHistory(*v.Result, v.Date)
+		} else if v.Result != nil && u.Username != "" {
+			if pub, ok := v.Result.Published(); ok {
+				<p class="mt-3 text-center text-sm text-muted">Published { when(pub.At) } by { pub.By }</p>
+			}
+		}
+		if v.Share != nil {
+			<div class="mt-4 flex flex-wrap justify-center gap-3">
+				<button type="button" data-share-open class={ primaryBtn + " h-12 min-w-56 text-base max-sm:w-full" }>
+					@icon("share", "size-5")
+					Share results
+				</button>
+			</div>
+			@resultsShare(*v.Result, *v.Share)
+		}
+		if u.Can(PermSell) && !u.IsAdmin() {
+			<div class="mt-6 text-center">
+				<a href="/sell" class={ penBtn }>Sell a ticket</a>
+			</div>
+		}
+		if b := brand(); b.ResultsNote != "" || b.Contact() != "" {
+			<footer class="mt-8 border-t border-rule pt-4 text-center text-sm leading-relaxed text-muted">
+				if b.ResultsNote != "" {
+					<p class="font-semibold text-ink">{ b.ResultsNote }</p>
+				}
+				if b.Contact() != "" {
+					<p>{ b.Contact() }</p>
+				}
+			</footer>
+		}
+	</div>
+}
+
+// --- Enter / correct results ----------------------------------------------------
+
+templ ResultDialog(f ResultForm, errs []string) {
+	if f.Published {
+		@modalShell("Correct published results") {
+			@ResultFormView(f, errs)
+		}
+	} else if f.Existing {
+		@modalShell("Edit draft results") {
+			@ResultFormView(f, errs)
+		}
+	} else {
+		@modalShell("Enter results") {
+			@ResultFormView(f, errs)
+		}
+	}
+}
+
+// resultBox is one 4-digit number box; static/modal.js moves on to the
+// next box after 4 digits and spreads a pasted list over the boxes.
+templ resultBox(name, value, label string, big bool) {
+	<input
+		name={ name }
+		value={ value }
+		inputmode="numeric"
+		maxlength="4"
+		pattern="[0-9]{4}"
+		autocomplete="off"
+		required
+		data-advance
+		aria-label={ label }
+		placeholder="0000"
+		class={ "block w-full rounded-lg border border-rule bg-white text-center font-bold tracking-[0.12em] text-ink tabular-nums outline-none placeholder:text-rule focus:border-form focus:ring-3 focus:ring-form/15",
+			templ.KV("h-12 text-2xl", big), templ.KV("h-11 text-lg", !big) }
+	/>
+}
+
+templ resultButtons(f ResultForm) {
+	if f.Published {
+		<button type="submit" name="action" value="publish" class={ primaryBtn + " min-w-32" }>Save corrections</button>
+	} else {
+		<button type="submit" name="action" value="draft" class={ secondaryBtn }>Save draft</button>
+		<button type="submit" name="action" value="publish" class={ primaryBtn + " min-w-32 bg-ok hover:bg-[#11603A]" }>Publish</button>
+	}
+}
+
+templ ResultFormView(f ResultForm, errs []string) {
+	@modalFormButtons("result-form", "/results", resultButtons(f)) {
+		if f.New {
+			<input type="hidden" name="mode" value="new"/>
+		}
+		@errorBox(errs)
+		<div class="grid gap-4 sm:grid-cols-[12rem_1fr] sm:items-end">
+			@field("Draw date") {
+				<input type="date" name="date" value={ f.Date } required class={ inputCls }/>
+			}
+			<p class="text-sm text-muted">
+				Type each 4-digit number; the cursor moves on by itself. You can also paste all 23 numbers into the first box.
+			</p>
+		</div>
+		if f.Published {
+			<div class="rounded-xl border border-[#F0D9A8] bg-[#FFF8EA] px-4 py-3 text-[15px] text-[#7A5200]">
+				These results are <b>published</b>: everyone sees your changes as soon as you save, and the correction is recorded.
+			</div>
+		} else {
+			<p class="rounded-xl border border-rule bg-paper px-4 py-3 text-[15px]">
+				<b>Save draft</b> keeps the results private to admins so you can check them. <b>Publish</b> shows them to everyone on the main page.
+			</p>
+		}
+		<fieldset class="space-y-2">
+			<legend class="mb-2 text-[13px] font-semibold text-muted">Top prizes</legend>
+			for i, label := range []string{"1st", "2nd", "3rd"} {
+				<label class="grid grid-cols-[3.5rem_1fr] items-center gap-3">
+					<span class="grid h-12 place-items-center rounded-lg bg-form text-lg font-extrabold text-white">{ label }</span>
+					@resultBox("top", f.Top[i], label+" prize", true)
+				</label>
+			}
+		</fieldset>
+		<div class="grid gap-5 sm:grid-cols-2">
+		for _, g := range []struct {
+			Name, Title string
+			Values      [10]string
+		}{{"starter", "Starter", f.Starter}, {"consolation", "Consolation", f.Consolation}} {
+			<fieldset>
+				<legend class="mb-2 text-[13px] font-semibold text-muted">{ g.Title } (10 numbers, left to right)</legend>
+				<div class="grid grid-cols-2 gap-2">
+					for i, v := range g.Values {
+						@resultBox(g.Name, v, fmt.Sprintf("%s %d", g.Title, i+1), false)
+					}
+				</div>
+			</fieldset>
+		}
+		</div>
+	}
+}
+
+// resultHistory is the admin's record of who saved, published, corrected
+// or unpublished a draw's results, plus the unpublish action.
+templ resultHistory(res DrawResult, date string) {
+	<section class="mt-4 rounded-2xl border border-rule bg-white p-4 sm:p-5">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<h2 class="text-[15px] font-bold text-form">History</h2>
+			if !res.Draft {
+				<a href={ templ.SafeURL("/results/" + date + "/unpublish") } hx-get={ "/results/" + date + "/unpublish" } hx-target="#modal" hx-push-url="false" class="text-sm font-semibold text-pen hover:underline">Unpublish</a>
+			}
+		</div>
+		<ol class="mt-2 space-y-1 border-l-2 border-rule pl-3 text-sm">
+			if len(res.Events) == 0 {
+				<li><b class="text-ok">Published</b> <span class="text-muted">{ when(res.CreatedAt) } by { res.CreatedBy }</span></li>
+			}
+			for i := len(res.Events) - 1; i >= 0; i-- {
+				<li class="flex flex-wrap gap-x-1.5">
+					switch res.Events[i].Action {
+						case resPublished:
+							<b class="text-ok">Published</b>
+						case resUnpublished:
+							<b class="text-pen">Unpublished</b>
+						case resCorrected:
+							<b class="text-form">Corrected</b>
+						default:
+							<b class="text-[#9A6200]">Saved as draft</b>
+					}
+					<span class="text-muted">{ when(res.Events[i].At) } by { res.Events[i].By }</span>
+				</li>
+			}
+		</ol>
+	</section>
+}
+
+templ ResultConfirmDialog(res DrawResult, action string) {
+	if action == "publish" {
+		@modalShell("Publish results for " + longDate(res.Date) + "?") {
+			@ResultConfirmForm(res, action)
+		}
+	} else {
+		@modalShell("Unpublish results for " + longDate(res.Date) + "?") {
+			@ResultConfirmForm(res, action)
+		}
+	}
+}
+
+templ ResultConfirmForm(res DrawResult, action string) {
+	if action == "publish" {
+		@modalForm("result-confirm-form", "/results/"+res.Date+"/publish", "", "Publish", false) {
+			<p class="text-[15px]">Everyone will see these results on the main page, including buyers who aren't signed in.</p>
+			<div class="grid grid-cols-3 gap-2 text-center">
+				for i, n := range []string{res.First, res.Second, res.Third} {
+					<div class="rounded-lg border border-rule py-2">
+						<div class="text-xs font-semibold text-form">{ []string{"1st", "2nd", "3rd"}[i] }</div>
+						<div class="text-xl font-bold tracking-[0.06em] tabular-nums">{ n }</div>
+					</div>
+				}
+			</div>
+			<p class="text-sm text-muted">Check the numbers against the official draw before publishing.</p>
+		}
+	} else {
+		@modalForm("result-confirm-form", "/results/"+res.Date+"/unpublish", "", "Unpublish", true) {
+			<div class="flex gap-3 rounded-xl border border-pen/30 bg-[#FDF1F2] px-4 py-3 text-[15px] text-pen-dark">
+				<span class="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-pen text-xs font-bold text-white">!</span>
+				<div>The results disappear from the main page for everyone except admins.</div>
+			</div>
+			<p class="text-[15px]">Use this if wrong results went out. Correct them, then publish again.</p>
+		}
+	}
+}
+
+// publicHeader is the small bar on pages people use without signing in
+// (results, sign-in, a buyer's ticket): the app's name, which goes to
+// the results, and one button on the right.
+templ publicHeader(current string) {
+	<header class="no-print -mt-1 mb-5 flex items-center justify-between gap-3 sm:-mt-3">
+		<a href="/" class="flex min-w-0 items-center gap-2.5" aria-label={ brand().Name + " results" }>
+			@logoMark("size-9 rounded-lg border border-rule", "size-5")
+			<span class="truncate text-lg font-extrabold tracking-tight [font-stretch:112%] sm:text-xl">{ brand().Name }</span>
+		</a>
+		if current == "results" {
+			<a href="/login" class={ secondaryBtn + " h-10 shrink-0 whitespace-nowrap px-3 text-sm" }>Staff sign in</a>
+		} else {
+			<a href="/" class={ secondaryBtn + " h-10 shrink-0 whitespace-nowrap px-3 text-sm" }>
+				@icon("trophy", "size-5")
+				Results
+			</a>
+		}
+	</header>
+}
+
+// resultsShareData is what static/share.js draws the results image from.
+type resultsShareData struct {
+	Kind        string     `json:"kind"`
+	Date        string     `json:"date"`
+	Label       string     `json:"label"`
+	First       string     `json:"first"`
+	Second      string     `json:"second"`
+	Third       string     `json:"third"`
+	Starter     [10]string `json:"starter"`
+	Consolation [10]string `json:"consolation"`
+	Link        string     `json:"link"`
+	Brand       shareBrand `json:"brand"`
+}
+
+// resultsShare adds the share window, the data for the image and a hidden
+// QR code (copied into the image) for one published draw.
+templ resultsShare(res DrawResult, sh ResultsShare) {
+	{{ note := "" }}
+	if sh.LocalOnly {
+		{{ note = "The link and QR code point to this computer, so people elsewhere can't open them. Start the app with ./share.sh to share a link that works anywhere." }}
+	}
+	@shareDialogShell("Share results "+longDate(res.Date), "Image of the results for "+longDate(res.Date), true, note)
+	<div id="share-qr" data-share-qr class="hidden" aria-hidden="true">
+		@sh.QR
+	</div>
+	@templ.JSONScript("results-data", resultsShareData{Kind: "results", Date: res.Date, Label: longDate(res.Date), First: res.First, Second: res.Second, Third: res.Third, Starter: res.Starter, Consolation: res.Consolation, Link: sh.Link, Brand: newShareBrand()})
+}

@@ -1,0 +1,138 @@
+package main
+
+import "fmt"
+
+// Shared parts for the long lists (sales, agents, users): a search form
+// that updates the results as you type, a result count, filter chips and
+// page links. The results live in #results; the search form fetches the
+// same page with htmx and swaps in only that part, so the search box
+// keeps its focus while typing, and the URL keeps the search and page.
+
+// searchForm wraps a list's search box and filters.
+templ searchForm(path string) {
+	<form
+		action={ templ.SafeURL(path) }
+		method="get"
+		role="search"
+		hx-get={ path }
+		hx-target="#results"
+		hx-select="#results"
+		hx-swap="outerHTML"
+		hx-push-url="true"
+		hx-trigger="input delay:300ms, submit"
+		hx-sync="this:replace"
+		class="mb-4 rounded-2xl border border-rule bg-white p-4 sm:mb-5 sm:p-5"
+	>
+		{ children... }
+	</form>
+}
+
+templ searchBox(value, placeholder, label string) {
+	<label class="block min-w-0 flex-1">
+		<span class="sr-only">{ label }</span>
+		<span class="relative block">
+			<span class="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-muted">
+				@icon("search", "size-5")
+			</span>
+			<input
+				type="search"
+				name="q"
+				value={ value }
+				placeholder={ placeholder }
+				autocomplete="off"
+				spellcheck="false"
+				enterkeyhint="search"
+				class={ inputCls + " pl-10" }
+			/>
+		</span>
+	</label>
+}
+
+// filterSelect is a compact labelled dropdown for the search form.
+templ filterSelect(name, label string) {
+	<label class="block min-w-0">
+		<span class="mb-1.5 block text-[13px] font-semibold text-muted">{ label }</span>
+		<select name={ name } class={ inputCls }>
+			{ children... }
+		</select>
+	</label>
+}
+
+// resultsHead is the "26–50 of 312 users" line above a list.
+templ resultsHead(p Pager, noun string, clearHref string, filtered bool) {
+	<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-rule px-4 py-3 sm:px-5">
+		<h2 class="text-[15px] font-bold text-form">
+			{ p.Summary() } { nounFor(p.Total, noun) }
+		</h2>
+		if filtered {
+			<a href={ templ.SafeURL(clearHref) } class="text-sm font-semibold text-muted hover:text-form">Clear search</a>
+		}
+	</div>
+}
+
+// chip shows one active filter that isn't in the form, with a way to drop it.
+templ chip(label string, clearHref templ.SafeURL) {
+	<span class="inline-flex h-8 items-center gap-1 rounded-full border border-form/30 bg-form/5 pl-3 pr-1 text-sm font-semibold text-form">
+		{ label }
+		<a href={ clearHref } class="grid size-6 place-items-center rounded-full hover:bg-form/10" aria-label={ "Remove filter: " + label }>
+			@icon("x", "size-3.5")
+		</a>
+	</span>
+}
+
+// pager is the row of page links under a list.
+templ pager(p Pager) {
+	if p.Pages() > 1 {
+		<nav class="flex items-center justify-between gap-2 border-t border-rule bg-paper/60 px-3 py-3 sm:px-5" aria-label="Pages">
+			@pageStep(p, p.Page-1, "Previous", "chev-left", p.Page <= 1)
+			<span class="text-sm font-semibold text-muted sm:hidden">Page { fmt.Sprint(p.Page) } of { fmt.Sprint(p.Pages()) }</span>
+			<ul class="hidden items-center gap-1 sm:flex">
+				for _, l := range p.Links() {
+					<li>
+						if l.Gap {
+							<span class="grid h-9 w-6 place-items-center text-muted">…</span>
+						} else if l.N == p.Page {
+							<span class="grid h-9 min-w-9 place-items-center rounded-lg bg-form px-2 text-sm font-bold text-white" aria-current="page">{ fmt.Sprint(l.N) }</span>
+						} else {
+							<a href={ p.URL(l.N) } class="grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold text-ink transition hover:bg-form/10 hover:text-form" aria-label={ fmt.Sprintf("Page %d", l.N) }>{ fmt.Sprint(l.N) }</a>
+						}
+					</li>
+				}
+			</ul>
+			@pageStep(p, p.Page+1, "Next", "chev-right", p.Page >= p.Pages())
+		</nav>
+	}
+}
+
+templ pageStep(p Pager, to int, label, ic string, disabled bool) {
+	if disabled {
+		<span class={ secondaryBtn + " h-9 px-3 text-sm opacity-40" } aria-disabled="true">
+			if ic == "chev-left" {
+				@icon(ic, "size-4")
+			}
+			{ label }
+			if ic == "chev-right" {
+				@icon(ic, "size-4")
+			}
+		</span>
+	} else {
+		<a href={ p.URL(to) } class={ secondaryBtn + " h-9 px-3 text-sm" } rel={ map[bool]string{true: "prev", false: "next"}[ic == "chev-left"] }>
+			if ic == "chev-left" {
+				@icon(ic, "size-4")
+			}
+			{ label }
+			if ic == "chev-right" {
+				@icon(ic, "size-4")
+			}
+		</a>
+	}
+}
+
+// noResults is shown when a search finds nothing.
+templ noResults(what, clearHref string) {
+	<div class="px-5 py-12 text-center">
+		<p class="font-semibold">No { what } match this search</p>
+		<p class="mt-1 text-sm text-muted">Check the spelling, try fewer words, or clear the search.</p>
+		<a href={ templ.SafeURL(clearHref) } class={ secondaryBtn + " mt-5" }>Clear search</a>
+	</div>
+}

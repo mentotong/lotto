@@ -1,0 +1,200 @@
+package main
+
+import "fmt"
+
+func when(t interface{ Format(string) string }) string { return t.Format("2 Jan 2006, 15:04") }
+
+templ priceStatus(p PriceSet) {
+	switch p.Status() {
+		case "Active":
+			<span class="inline-flex h-6 items-center gap-1.5 rounded-full bg-[#EEF8F2] px-2.5 text-xs font-bold text-ok"><span class="size-1.5 rounded-full bg-ok"></span>Active</span>
+		case "Deactivated":
+			<span class="inline-flex h-6 items-center gap-1.5 rounded-full bg-paper px-2.5 text-xs font-bold text-muted"><span class="size-1.5 rounded-full bg-muted/60"></span>Deactivated</span>
+		default:
+			<span class="inline-flex h-6 items-center rounded-full border border-dashed border-rule px-2.5 text-xs font-bold text-muted">Not activated</span>
+	}
+}
+
+// priceTrio shows the three game prices side by side.
+templ priceTrio(p PriceSet, big bool) {
+	<div class="grid grid-cols-3 gap-2">
+		for _, g := range gameHelps {
+			<div class={ "rounded-lg border border-rule/70 px-3", templ.KV("py-3", big), templ.KV("py-2", !big) }>
+				<div class="flex items-center gap-2">
+					@gameBadge(g.Game)
+				</div>
+				<div class={ "mt-1.5 font-bold tabular-nums", templ.KV("text-2xl", big), templ.KV("text-lg", !big) }>{ p.Prices[g.Game].String() }</div>
+			</div>
+		}
+	</div>
+}
+
+templ PricesPage(v PricesView) {
+	@pageHead("Prices", "Selling always uses the active price list. Changing prices adds a new list, so earlier prices stay on record. Tickets keep the price they were sold at.") {
+		@openModal("/settings/new", "New prices", primaryBtn)
+	}
+	if v.Active != nil {
+		<section class="mb-5 overflow-hidden rounded-2xl border-2 border-ok/40 bg-white">
+			<div class="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-5">
+				<h2 class="flex items-center gap-2.5 text-[15px] font-bold">
+					<span class="text-form">Active prices</span>
+					<span class="text-muted">#{ fmt.Sprint(v.Active.ID) }</span>
+					@priceStatus(v.Active.PriceSet)
+				</h2>
+				<a
+					href={ templ.SafeURL(fmt.Sprintf("/settings/%d/deactivate", v.Active.ID)) }
+					hx-get={ fmt.Sprintf("/settings/%d/deactivate", v.Active.ID) }
+					hx-target="#modal"
+					hx-push-url="false"
+					class="text-sm font-semibold text-pen hover:underline"
+				>Deactivate (stop selling)</a>
+			</div>
+			<div class="p-4 sm:p-5">
+				@priceTrio(v.Active.PriceSet, true)
+				if ev, ok := v.Active.Since(); ok {
+					<p class="mt-3 text-sm text-muted">Active since { when(ev.At) }, by { ev.By }. { plural(v.Active.Tickets, "ticket") } sold at these prices.</p>
+				}
+			</div>
+		</section>
+	} else {
+		<section class="mb-5 flex gap-3 rounded-2xl border-2 border-pen/40 bg-[#FDF1F2] px-4 py-4 text-pen-dark sm:px-5" role="alert">
+			<span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-pen text-sm font-bold text-white">!</span>
+			<div>
+				<p class="font-bold">Selling is stopped</p>
+				<p class="mt-0.5 text-[15px]">No price list is active, so no agent can sell. Activate a price list below, or add new prices.</p>
+			</div>
+		</section>
+	}
+	<section class="overflow-hidden rounded-2xl border border-rule bg-white">
+		@resultsHead(v.Pager, "price list", "", false)
+		<ol id="price-history" class="divide-y divide-rule/70">
+			for _, p := range v.Rows {
+				<li class={ "p-4 sm:p-5", templ.KV("bg-[#F6FBF8]", p.Active) }>
+					<div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2">
+								<span class="text-[17px] font-bold">Price list #{ fmt.Sprint(p.ID) }</span>
+								@priceStatus(p.PriceSet)
+							</div>
+							<p class="mt-0.5 text-sm text-muted">
+								Created { when(p.CreatedAt) } by { p.CreatedBy }
+								if p.Tickets > 0 {
+									· { plural(p.Tickets, "ticket") } sold
+								}
+							</p>
+							if p.Note != "" {
+								<p class="mt-1 text-[15px]">{ p.Note }</p>
+							}
+						</div>
+						if p.Active {
+							<a
+								href={ templ.SafeURL(fmt.Sprintf("/settings/%d/deactivate", p.ID)) }
+								hx-get={ fmt.Sprintf("/settings/%d/deactivate", p.ID) }
+								hx-target="#modal"
+								hx-push-url="false"
+								class={ secondaryBtn + " h-9 px-3 text-sm text-pen" }
+							>Deactivate</a>
+						} else {
+							<a
+								href={ templ.SafeURL(fmt.Sprintf("/settings/%d/activate", p.ID)) }
+								hx-get={ fmt.Sprintf("/settings/%d/activate", p.ID) }
+								hx-target="#modal"
+								hx-push-url="false"
+								class={ secondaryBtn + " h-9 px-3 text-sm text-form" }
+							>Activate</a>
+						}
+					</div>
+					<div class="mt-3 max-w-md">
+						@priceTrio(p.PriceSet, false)
+					</div>
+					if len(p.Events) > 0 {
+						<ol class="mt-3 space-y-1 border-l-2 border-rule pl-3 text-sm">
+							for i := len(p.Events) - 1; i >= 0; i-- {
+								<li class="flex flex-wrap gap-x-1.5">
+									if p.Events[i].Action == evActivated {
+										<b class="text-ok">Activated</b>
+									} else {
+										<b class="text-muted">Deactivated</b>
+									}
+									<span class="text-muted">{ when(p.Events[i].At) } by { p.Events[i].By }</span>
+								</li>
+							}
+						</ol>
+					}
+				</li>
+			}
+		</ol>
+		@pager(v.Pager)
+	</section>
+}
+
+// --- New prices ---------------------------------------------------------------
+
+templ NewPricesDialog(f PriceForm, errs []string) {
+	@modalShell("New prices") {
+		@NewPricesForm(f, errs)
+	}
+}
+
+templ NewPricesForm(f PriceForm, errs []string) {
+	@modalForm("new-prices-form", "/settings", "", "Save prices", false) {
+		<p class="text-sm text-muted">This adds a new price list. The current one stays in the history. Tickets already sold keep their prices.</p>
+		@errorBox(errs)
+		<div class="divide-y divide-rule/70 rounded-xl border border-rule">
+			for _, g := range gameHelps {
+				<label class="flex items-center gap-4 px-4 py-3">
+					@patternBoxes(g.Pattern)
+					<span class="flex-1 font-bold">{ string(g.Game) }</span>
+					<span class="flex w-36 items-center justify-end gap-2">
+						if !brand().CurrencyAfter {
+							<span class="font-semibold text-muted">{ brand().Currency }</span>
+						}
+						<input name={ "price_" + string(g.Game) } value={ f.Prices[g.Game] } inputmode="decimal" required aria-label={ string(g.Game) + " price" } class={ inputCls + " w-24 text-right font-semibold" }/>
+						if brand().CurrencyAfter {
+							<span class="font-semibold text-muted">{ brand().Currency }</span>
+						}
+					</span>
+				</label>
+			}
+		</div>
+		@field("Note (optional)") {
+			<input name="note" value={ f.Note } maxlength="200" placeholder="e.g. New prices from November" class={ inputCls }/>
+		}
+		@toggle("activate", f.Activate, "Activate now", "Selling switches to these prices straight away and the current list is deactivated. Leave off to save it for later.")
+	}
+}
+
+// --- Activate / deactivate confirmation -------------------------------------
+
+templ PriceConfirmDialog(p PriceSet, action string, current *PriceSet) {
+	if action == "activate" {
+		@modalShell(fmt.Sprintf("Activate price list #%d?", p.ID)) {
+			@PriceConfirmForm(p, action, current)
+		}
+	} else {
+		@modalShell(fmt.Sprintf("Deactivate price list #%d?", p.ID)) {
+			@PriceConfirmForm(p, action, current)
+		}
+	}
+}
+
+templ PriceConfirmForm(p PriceSet, action string, current *PriceSet) {
+	if action == "activate" {
+		@modalForm("price-confirm-form", fmt.Sprintf("/settings/%d/activate", p.ID), "", "Activate", false) {
+			<p class="text-[15px]">From now on, every new ticket is sold at these prices:</p>
+			@priceTrio(p, false)
+			if current != nil && current.ID != p.ID {
+				<p class="text-[15px]">Price list #{ fmt.Sprint(current.ID) } ({ current.Prices[Game4D].String() } / { current.Prices[Game3D].String() } / { current.Prices[Game2D].String() }) will be <b>deactivated</b>.</p>
+			}
+			<p class="text-sm text-muted">Tickets already sold keep the price they were sold at.</p>
+		}
+	} else {
+		@modalForm("price-confirm-form", fmt.Sprintf("/settings/%d/deactivate", p.ID), "", "Deactivate and stop selling", true) {
+			<div class="flex gap-3 rounded-xl border border-pen/30 bg-[#FDF1F2] px-4 py-3 text-[15px] text-pen-dark">
+				<span class="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-pen text-xs font-bold text-white">!</span>
+				<div><b>Selling stops for every agent</b> until you activate a price list again.</div>
+			</div>
+			<p class="text-[15px]">Use this to close sales, for example just before a draw. The prices stay in the history and can be activated again later.</p>
+		}
+	}
+}
